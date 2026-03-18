@@ -1,0 +1,23 @@
+[project]
+name = "skylight-mcp"
+version = "0.1.0"
+description = "FastMCP server for the Skylight API"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "Skylight MCP" }
+]
+dependencies = [
+  "fastmcp>=0.1.0",
+  "httpx>=0.27.0",
+  "pydantic>=2.7.0",
+  "pydantic-settings>=2.2.1",
+]
+
+[project.scripts]
+skylight-mcp = "skylight_mcp.server:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
