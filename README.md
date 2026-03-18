@@ -12,24 +12,49 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-2. Configure environment variables (copy `.env.example` and edit):
+2. Run interactive setup to create your config:
 
 ```bash
-cp .env.example .env
+skylight-mcp setup
 ```
 
-Required:
-- `SKYLIGHT_EMAIL`
-- `SKYLIGHT_PASSWORD`
+This writes `~/Library/Application Support/skylight-mcp/config.toml`.
+You can edit this file later if needed.
 
-Optional:
-- `SKYLIGHT_FRAME_ID` (default: auto-pick if only one)
+Environment overrides (optional):
+```bash
+SKYLIGHT_EMAIL=you@example.com SKYLIGHT_PASSWORD=your_password skylight-mcp run
+```
 
 3. Run the server:
 
 ```bash
-skylight-mcp
+skylight-mcp run
 ```
+
+## CLI Commands
+
+- `skylight-mcp setup`
+- `skylight-mcp run`
+- `skylight-mcp install`
+- `skylight-mcp uninstall`
+- `skylight-mcp status`
+- `skylight-mcp logs`
+
+## One-Command Install (macOS user login)
+
+This installs a LaunchAgent that runs on user login.
+
+```bash
+curl -sSL https://raw.githubusercontent.com/aarons22/skylight-mcp/main/install.sh | bash
+```
+
+Optional:
+```bash
+SKYLIGHT_FRAME_ID=your_frame_id curl -sSL https://raw.githubusercontent.com/aarons22/skylight-mcp/main/install.sh | bash
+```
+
+It installs to `$HOME/.local/skylight-mcp` and runs as the current user.
 
 ## Tools
 
@@ -52,6 +77,6 @@ skylight-mcp
 
 ## Notes
 
-- Authentication uses email/password via `/sessions` and caches `user_id` + `user_token` in `.skylight_token.json` (repo root).
+- Authentication uses email/password via `/sessions` and caches `user_id` + `user_token` in `~/Library/Application Support/skylight-mcp/.skylight_token.json`.
 - Requests use Token auth on `api.ourskylight.com` and retry once with Basic auth on `app.ourskylight.com` for 401/404.
 - Deleting list items uses the bulk destroy endpoint only.

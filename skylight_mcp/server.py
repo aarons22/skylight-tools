@@ -17,6 +17,7 @@ def _client() -> SkylightClient:
         email=settings.skylight_email,
         password=settings.skylight_password,
         token_cache_path=token_cache_path(),
+        default_frame_id=settings.skylight_frame_id,
     )
 
 

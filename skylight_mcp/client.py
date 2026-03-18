@@ -26,12 +26,14 @@ class SkylightClient:
         email: str,
         password: str,
         token_cache_path: Path,
+        default_frame_id: Optional[str] = None,
     ) -> None:
         self.email = email
         self.password = password
         self.base_url = self.DEFAULT_BASE_URL
         self.fallback_base_url = self.DEFAULT_FALLBACK_BASE_URL
         self.token_cache_path = token_cache_path
+        self.default_frame_id = default_frame_id
         self._auth: Optional[SkylightAuth] = None
         self._client = httpx.Client(timeout=15.0)
         self._frames_cache: Optional[List[Dict[str, Any]]] = None
@@ -156,6 +158,8 @@ class SkylightClient:
     def resolve_frame_id(self, frame_id: Optional[str]) -> str:
         if frame_id:
             return frame_id
+        if self.default_frame_id:
+            return self.default_frame_id
         if not self._frames_cache:
             self._frames_cache = self.get_frames()
         if len(self._frames_cache) == 1:
