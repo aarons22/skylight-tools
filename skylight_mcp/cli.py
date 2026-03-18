@@ -48,6 +48,9 @@ def cmd_setup(args: argparse.Namespace) -> int:
 
 
 def _resolve_entrypoint() -> str:
+    argv0 = Path(sys.argv[0])
+    if argv0.exists():
+        return str(argv0.resolve())
     # Prefer the venv sibling of the current interpreter
     candidate = Path(sys.executable).resolve().parent / "skylight-mcp"
     if candidate.exists():

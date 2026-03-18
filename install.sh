@@ -43,15 +43,21 @@ python3 -m venv "$INSTALL_DIR/.venv"
 
 # Run guided setup if config missing, then install LaunchAgent
 CONFIG_FILE="$HOME/Library/Application Support/skylight-mcp/config.toml"
+CLI_BIN="$INSTALL_DIR/.venv/bin/skylight-mcp"
+if [[ ! -x "$CLI_BIN" ]]; then
+  echo "skylight-mcp entrypoint not found at $CLI_BIN" >&2
+  echo "Try re-running install or ensure dependencies installed." >&2
+  exit 1
+fi
 if [[ ! -f "$CONFIG_FILE" ]]; then
   if [[ -n "$FRAME_ID" ]]; then
-    "$INSTALL_DIR/.venv/bin/skylight-mcp" setup --frame-id "$FRAME_ID"
+    "$CLI_BIN" setup --frame-id "$FRAME_ID"
   else
-    "$INSTALL_DIR/.venv/bin/skylight-mcp" setup
+    "$CLI_BIN" setup
   fi
 fi
 
-"$INSTALL_DIR/.venv/bin/skylight-mcp" install
+"$CLI_BIN" install
 
 cat <<OUT
 Installed and started $APP_NAME.
