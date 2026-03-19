@@ -46,28 +46,22 @@ BIN_DIR="$HOME/.local/bin"
 mkdir -p "$BIN_DIR"
 ln -sf "$INSTALL_DIR/.venv/bin/skylight-mcp" "$BIN_DIR/skylight-mcp"
 
-# Run guided setup if config missing, then install LaunchAgent
-CONFIG_FILE="$HOME/Library/Application Support/skylight-mcp/config.toml"
 CLI_BIN="$INSTALL_DIR/.venv/bin/skylight-mcp"
 if [[ ! -x "$CLI_BIN" ]]; then
   echo "skylight-mcp entrypoint not found at $CLI_BIN" >&2
   echo "Try re-running install or ensure dependencies installed." >&2
   exit 1
 fi
-if [[ ! -f "$CONFIG_FILE" ]]; then
-  if [[ -n "$FRAME_ID" ]]; then
-    "$CLI_BIN" setup --frame-id "$FRAME_ID"
-  else
-    "$CLI_BIN" setup
-  fi
-fi
 
-"$CLI_BIN" install
+# Install LaunchAgent if config exists; otherwise leave setup to user
+"$CLI_BIN" install || true
 
 cat <<OUT
 Installed and started $APP_NAME.
 CLI:
   Ensure $BIN_DIR is on your PATH, then run: skylight-mcp --help
+Next:
+  Run 'skylight-mcp setup' to configure credentials and port.
 Logs:
   $HOME/Library/Logs/skylight-mcp.out.log
   $HOME/Library/Logs/skylight-mcp.err.log
