@@ -65,15 +65,39 @@ class SkylightClient:
 
     def _login(self, base_url: str) -> SkylightAuth:
         url = f"{base_url}/sessions"
-        payload = {"user": {"email": self.email, "password": self.password}}
-        resp = self._client.post(url, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
-        user_id = data.get("user_id") or data.get("id")
-        user_token = data.get("user_token") or data.get("token") or data.get("auth_token")
-        if not user_id or not user_token:
-            raise ValueError("Login response missing user_id/user_token")
-        return SkylightAuth(user_id=str(user_id), user_token=str(user_token))
+        payloads = [
+            {"user": {"email": self.email, "password": self.password}},
+            {"email": self.email, "password": self.password},
+        ]
+        last_error: Optional[Exception] = None
+
+        for payload in payloads:
+            try:
+                resp = self._client.post(url, json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+
+                # Legacy response
+                user_id = data.get("user_id") or data.get("id")
+                user_token = data.get("user_token") or data.get("token") or data.get("auth_token")
+
+                # JSON:API response
+                if not user_id or not user_token:
+                    data_obj = data.get("data") if isinstance(data, dict) else None
+                    attrs = data_obj.get("attributes", {}) if isinstance(data_obj, dict) else {}
+                    user_id = user_id or data_obj.get("id") if isinstance(data_obj, dict) else None
+                    user_token = user_token or attrs.get("user_token") or attrs.get("token") or attrs.get("auth_token")
+
+                if user_id and user_token:
+                    return SkylightAuth(user_id=str(user_id), user_token=str(user_token))
+            except Exception as exc:
+                last_error = exc
+
+        if isinstance(last_error, httpx.RequestError):
+            raise last_error
+        if isinstance(last_error, httpx.HTTPStatusError):
+            raise last_error
+        raise ValueError("Login response missing user_id/user_token") from last_error
 
     def _ensure_auth(self) -> SkylightAuth:
         if self._auth:
@@ -86,10 +110,12 @@ class SkylightClient:
             auth = self._login(self.base_url)
         except httpx.RequestError:
             auth = self._login(self.fallback_base_url)
+            self.base_url = self.fallback_base_url
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code if exc.response is not None else None
             if status in (404, 502, 503, 504):
                 auth = self._login(self.fallback_base_url)
+                self.base_url = self.fallback_base_url
             else:
                 raise
         self._cache_token(auth)
@@ -113,20 +139,29 @@ class SkylightClient:
     ) -> Any:
         auth = self._ensure_auth()
         url = f"{self.base_url}{endpoint}"
+        use_basic = self.base_url == self.fallback_base_url
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "Authorization": self._token_header(auth),
+            "Authorization": self._basic_header(auth) if use_basic else self._token_header(auth),
             "User-Agent": "SkylightMCP",
         }
 
-        resp = self._client.request(method, url, json=json_body, params=params, headers=headers)
+        try:
+            resp = self._client.request(method, url, json=json_body, params=params, headers=headers)
+        except httpx.RequestError:
+            # Retry with fallback host + Basic auth
+            fallback_url = f"{self.fallback_base_url}{endpoint}"
+            headers["Authorization"] = self._basic_header(auth)
+            resp = self._client.request(method, fallback_url, json=json_body, params=params, headers=headers)
+            self.base_url = self.fallback_base_url
 
         if resp.status_code in (401, 404):
             # Retry once with fallback host and Basic auth
             fallback_url = f"{self.fallback_base_url}{endpoint}"
             headers["Authorization"] = self._basic_header(auth)
             resp = self._client.request(method, fallback_url, json=json_body, params=params, headers=headers)
+            self.base_url = self.fallback_base_url
 
         if resp.status_code == 401:
             # token may be stale; clear and retry once
@@ -134,7 +169,10 @@ class SkylightClient:
             if self.token_cache_path.exists():
                 self.token_cache_path.unlink()
             auth = self._ensure_auth()
-            headers["Authorization"] = self._token_header(auth)
+            headers["Authorization"] = (
+                self._basic_header(auth) if self.base_url == self.fallback_base_url else self._token_header(auth)
+            )
+            url = f"{self.base_url}{endpoint}"
             resp = self._client.request(method, url, json=json_body, params=params, headers=headers)
 
         resp.raise_for_status()
