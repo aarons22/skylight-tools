@@ -1102,6 +1102,237 @@ No `PUT /frames/{frameId}/meals/sittings/{sittingId}` calls were captured in `ou
 
 ---
 
+## Tasks & Chores
+
+Skylight has two task concepts:
+- **Task box items**: unscheduled task bank (templates that can be scheduled as chores)
+- **Chores**: scheduled/recurring tasks assigned to family member profiles
+
+Tasks can be either "chores" or "routines" (distinguished by a `routine` boolean). Family member profiles are represented as **categories** (`attributes.label` = profile name like "Julian", "Althea").
+
+### Categories (Family Member Profiles)
+
+#### Get Categories
+**Request:**
+```http
+GET /frames/{frameId}/categories
+Authorization: Token token="<base64_token>"
+```
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "id": "cat_123",
+      "type": "category_detail",
+      "attributes": {
+        "label": "Julian",
+        "color": "#FF6B6B",
+        "position": 0
+      }
+    },
+    {
+      "id": "cat_456",
+      "type": "category_detail",
+      "attributes": {
+        "label": "Althea",
+        "color": "#4ECDC4",
+        "position": 1
+      }
+    }
+  ]
+}
+```
+
+**Key Fields:**
+- `type`: `category_detail`
+- `attributes.label`: Profile name (e.g., "Julian", "Althea")
+
+---
+
+### Reward Points
+
+#### Get Reward Points
+**Request:**
+```http
+GET /frames/{frameId}/reward_points
+Authorization: Token token="<base64_token>"
+```
+
+**Response (plain array, not JSON:API wrapped):**
+```json
+[
+  {
+    "category_id": "cat_123",
+    "lifetime_points_earned": 150,
+    "current_point_balance": 45
+  },
+  {
+    "category_id": "cat_456",
+    "lifetime_points_earned": 200,
+    "current_point_balance": 80
+  }
+]
+```
+
+---
+
+### Task Box Items
+
+#### Get Task Box Items
+**Request:**
+```http
+GET /frames/{frameId}/task_box/items
+Authorization: Token token="<base64_token>"
+```
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "id": "item_789",
+      "type": "task_box_item",
+      "attributes": {
+        "summary": "Take out trash",
+        "emoji_icon": "🗑️",
+        "routine": false,
+        "reward_points": 5
+      }
+    }
+  ]
+}
+```
+
+#### Create Task Box Item
+**Request:**
+```http
+POST /frames/{frameId}/task_box/items
+Authorization: Token token="<base64_token>"
+Content-Type: application/json
+
+{
+  "summary": "Take out trash",
+  "routine": false,
+  "emoji_icon": "🗑️",
+  "reward_points": 5
+}
+```
+
+#### Update Task Box Item
+**Request:**
+```http
+PATCH /frames/{frameId}/task_box/items/{itemId}
+Authorization: Token token="<base64_token>"
+Content-Type: application/json
+
+{
+  "summary": "Take out recycling",
+  "reward_points": 10
+}
+```
+
+#### Delete Task Box Item
+**Request:**
+```http
+DELETE /frames/{frameId}/task_box/items/{itemId}
+Authorization: Token token="<base64_token>"
+```
+
+---
+
+### Chores
+
+#### Get Chores
+**Request:**
+```http
+GET /frames/{frameId}/chores?after=2026-03-01&before=2026-03-31&include_late=true&category_id=cat_123
+Authorization: Token token="<base64_token>"
+```
+
+**Query Parameters:**
+- `after` (optional): Start date (YYYY-MM-DD)
+- `before` (optional): End date (YYYY-MM-DD)
+- `include_late` (optional): Include overdue chores (`true`/`false`)
+- `category_id` (optional): Filter by profile/category ID
+
+#### Create Chore (via create_multiple)
+**Request:**
+```http
+POST /frames/{frameId}/chores/create_multiple
+Authorization: Token token="<base64_token>"
+Content-Type: application/json
+
+{
+  "summary": "Clean room",
+  "start": "2026-03-21",
+  "routine": false,
+  "category_ids": ["cat_123"],
+  "emoji_icon": "🧹",
+  "reward_points": 10,
+  "start_time": "09:00",
+  "recurrence_set": "RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=SA",
+  "recurring_until": "2026-06-30"
+}
+```
+
+**Notes:**
+- `category_ids` array — creates one chore per category (profile)
+- `recurrence_set` uses RRULE format
+- `start_time` is optional (HH:MM)
+
+#### Update Chore
+**Request:**
+```http
+PUT /frames/{frameId}/chores/{choreId}
+Authorization: Token token="<base64_token>"
+Content-Type: application/json
+
+{
+  "summary": "Clean room",
+  "emoji_icon": "🧹",
+  "reward_points": 10,
+  "start": "2026-03-22",
+  "recurrence_set": null,
+  "category_id": "cat_123",
+  "routine": false,
+  "up_for_grabs": false
+}
+```
+
+**Chore ID formats:**
+- Non-recurring: numeric series ID (e.g., `72279767`)
+- Recurring instance: composite `{series}-{date}` or `{series}-{date}-{time}` (e.g., `72279767-2026-03-21`)
+
+**Notes:**
+- PUT sends the full chore object (not partial update)
+- Key use case: rescheduling by changing `start` date
+
+#### Complete Chore
+**Request:**
+```http
+PUT /frames/{frameId}/chores/{choreId}
+Authorization: Token token="<base64_token>"
+Content-Type: application/json
+
+{
+  "status": "complete"
+}
+```
+
+#### Delete Chore
+**Request:**
+```http
+DELETE /frames/{frameId}/chores/{choreId}?apply_to=one
+Authorization: Token token="<base64_token>"
+```
+
+**Query Parameters:**
+- `apply_to`: `one` (single instance) or `all` (entire series)
+
+---
+
 ## API Behavior Notes
 
 ### Paprika Specific

@@ -38,6 +38,7 @@ class SkylightClient:
         self._client = httpx.Client(timeout=15.0)
         self._frames_cache: Optional[List[Dict[str, Any]]] = None
         self._lists_cache: Optional[List[Dict[str, Any]]] = None
+        self._categories_cache: Optional[List[Dict[str, Any]]] = None
 
     def _load_cached_token(self) -> Optional[SkylightAuth]:
         if not self.token_cache_path.exists():
@@ -336,6 +337,211 @@ class SkylightClient:
         list_id = self.resolve_list_id(frame_id, list_id, list_name)
         payload = {"ids": ids}
         return self._request("DELETE", f"/frames/{frame_id}/lists/{list_id}/list_items/bulk_destroy", payload)
+
+    # ---- Categories (Family Member Profiles) ----
+    def get_categories(self, frame_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        frame_id = self.resolve_frame_id(frame_id)
+        result = self._request("GET", f"/frames/{frame_id}/categories")
+        if isinstance(result, dict):
+            data = result.get("data")
+            if isinstance(data, list):
+                return data
+        if isinstance(result, list):
+            return result
+        return []
+
+    def resolve_category_id(
+        self, frame_id: str, category_id: Optional[str], profile_name: Optional[str]
+    ) -> Optional[str]:
+        if category_id:
+            return category_id
+        if not profile_name:
+            return None
+        if self._categories_cache is None:
+            self._categories_cache = self.get_categories(frame_id)
+        target = profile_name.lower()
+        for item in self._categories_cache:
+            label = (item.get("attributes", {}).get("label") or "").lower()
+            if label == target:
+                return str(item.get("id"))
+        raise ValueError(f"Profile not found: {profile_name}")
+
+    # ---- Task Box Items ----
+    def get_task_box_items(self, frame_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        frame_id = self.resolve_frame_id(frame_id)
+        result = self._request("GET", f"/frames/{frame_id}/task_box/items")
+        if isinstance(result, dict):
+            data = result.get("data")
+            if isinstance(data, list):
+                return data
+        if isinstance(result, list):
+            return result
+        return []
+
+    def create_task_box_item(
+        self,
+        frame_id: Optional[str] = None,
+        summary: str = "",
+        emoji_icon: Optional[str] = None,
+        routine: bool = False,
+        reward_points: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        frame_id = self.resolve_frame_id(frame_id)
+        payload: Dict[str, Any] = {
+            "summary": summary,
+            "routine": routine,
+        }
+        if emoji_icon is not None:
+            payload["emoji_icon"] = emoji_icon
+        if reward_points is not None:
+            payload["reward_points"] = reward_points
+        return self._request("POST", f"/frames/{frame_id}/task_box/items", payload)
+
+    def update_task_box_item(
+        self,
+        frame_id: Optional[str] = None,
+        item_id: str = "",
+        summary: Optional[str] = None,
+        emoji_icon: Optional[str] = None,
+        routine: Optional[bool] = None,
+        reward_points: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        frame_id = self.resolve_frame_id(frame_id)
+        payload: Dict[str, Any] = {}
+        if summary is not None:
+            payload["summary"] = summary
+        if emoji_icon is not None:
+            payload["emoji_icon"] = emoji_icon
+        if routine is not None:
+            payload["routine"] = routine
+        if reward_points is not None:
+            payload["reward_points"] = reward_points
+        return self._request("PATCH", f"/frames/{frame_id}/task_box/items/{item_id}", payload)
+
+    def delete_task_box_item(self, frame_id: Optional[str] = None, item_id: str = "") -> Dict[str, Any]:
+        frame_id = self.resolve_frame_id(frame_id)
+        return self._request("DELETE", f"/frames/{frame_id}/task_box/items/{item_id}")
+
+    # ---- Chores ----
+    def get_chores(
+        self,
+        frame_id: Optional[str] = None,
+        after: Optional[str] = None,
+        before: Optional[str] = None,
+        include_late: Optional[bool] = None,
+        filter_profile: Optional[str] = None,
+    ) -> Any:
+        frame_id = self.resolve_frame_id(frame_id)
+        params: Dict[str, Any] = {}
+        if after is not None:
+            params["after"] = after
+        if before is not None:
+            params["before"] = before
+        if include_late is not None:
+            params["include_late"] = str(include_late).lower()
+        category_id = self.resolve_category_id(frame_id, None, filter_profile)
+        if category_id:
+            params["category_id"] = category_id
+        return self._request("GET", f"/frames/{frame_id}/chores", params=params)
+
+    def create_chore(
+        self,
+        frame_id: Optional[str] = None,
+        summary: str = "",
+        start: str = "",
+        routine: bool = False,
+        start_time: Optional[str] = None,
+        recurrence_set: Optional[str] = None,
+        emoji_icon: Optional[str] = None,
+        recurring_until: Optional[str] = None,
+        reward_points: Optional[int] = None,
+        category_ids: Optional[List[str]] = None,
+        category_id: Optional[str] = None,
+        profile_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        frame_id = self.resolve_frame_id(frame_id)
+        resolved_cat = self.resolve_category_id(frame_id, category_id, profile_name)
+        cat_ids = category_ids or ([resolved_cat] if resolved_cat else [])
+        payload: Dict[str, Any] = {
+            "summary": summary,
+            "start": start,
+            "routine": routine,
+            "category_ids": cat_ids,
+        }
+        if start_time is not None:
+            payload["start_time"] = start_time
+        if recurrence_set is not None:
+            payload["recurrence_set"] = recurrence_set
+        if emoji_icon is not None:
+            payload["emoji_icon"] = emoji_icon
+        if recurring_until is not None:
+            payload["recurring_until"] = recurring_until
+        if reward_points is not None:
+            payload["reward_points"] = reward_points
+        return self._request("POST", f"/frames/{frame_id}/chores/create_multiple", payload)
+
+    def update_chore(
+        self,
+        frame_id: Optional[str] = None,
+        chore_id: str = "",
+        summary: Optional[str] = None,
+        emoji_icon: Optional[str] = None,
+        reward_points: Optional[int] = None,
+        start: Optional[str] = None,
+        start_time: Optional[str] = None,
+        recurrence_set: Optional[str] = None,
+        recurring_until: Optional[str] = None,
+        routine: Optional[bool] = None,
+        category_id: Optional[str] = None,
+        profile_name: Optional[str] = None,
+        up_for_grabs: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        frame_id = self.resolve_frame_id(frame_id)
+        resolved_cat = self.resolve_category_id(frame_id, category_id, profile_name)
+        payload: Dict[str, Any] = {}
+        if summary is not None:
+            payload["summary"] = summary
+        if emoji_icon is not None:
+            payload["emoji_icon"] = emoji_icon
+        if reward_points is not None:
+            payload["reward_points"] = reward_points
+        if start is not None:
+            payload["start"] = start
+        if start_time is not None:
+            payload["start_time"] = start_time
+        if recurrence_set is not None:
+            payload["recurrence_set"] = recurrence_set
+        if recurring_until is not None:
+            payload["recurring_until"] = recurring_until
+        if routine is not None:
+            payload["routine"] = routine
+        if resolved_cat is not None:
+            payload["category_id"] = resolved_cat
+        if up_for_grabs is not None:
+            payload["up_for_grabs"] = up_for_grabs
+        return self._request("PUT", f"/frames/{frame_id}/chores/{chore_id}", payload)
+
+    def complete_chore(self, frame_id: Optional[str] = None, chore_id: str = "") -> Dict[str, Any]:
+        frame_id = self.resolve_frame_id(frame_id)
+        return self._request("PUT", f"/frames/{frame_id}/chores/{chore_id}", {"status": "complete"})
+
+    def delete_chore(
+        self, frame_id: Optional[str] = None, chore_id: str = "", apply_to: str = "one"
+    ) -> Dict[str, Any]:
+        frame_id = self.resolve_frame_id(frame_id)
+        return self._request("DELETE", f"/frames/{frame_id}/chores/{chore_id}", params={"apply_to": apply_to})
+
+    # ---- Reward Points ----
+    def get_reward_points(self, frame_id: Optional[str] = None) -> Any:
+        frame_id = self.resolve_frame_id(frame_id)
+        result = self._request("GET", f"/frames/{frame_id}/reward_points")
+        if isinstance(result, dict):
+            data = result.get("data")
+            if isinstance(data, list):
+                return data
+        if isinstance(result, list):
+            return result
+        return result
 
     # ---- Meals ----
     def get_meal_categories(self, frame_id: Optional[str]) -> List[Dict[str, Any]]:

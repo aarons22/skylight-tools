@@ -70,6 +70,124 @@ def delete_list_items(
 
 
 @mcp.tool()
+def get_categories(frame_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """List family member profiles (categories) for the frame."""
+    return _client().get_categories(frame_id)
+
+
+@mcp.tool()
+def get_reward_points(frame_id: Optional[str] = None) -> Any:
+    """Get reward point balances per family member profile."""
+    return _client().get_reward_points(frame_id)
+
+
+@mcp.tool()
+def get_task_box_items(frame_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """List unscheduled tasks from the task bank."""
+    return _client().get_task_box_items(frame_id)
+
+
+@mcp.tool()
+def create_task_box_item(
+    summary: str,
+    emoji_icon: Optional[str] = None,
+    routine: bool = False,
+    reward_points: Optional[int] = None,
+    frame_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Create a new task in the task bank."""
+    return _client().create_task_box_item(frame_id, summary, emoji_icon, routine, reward_points)
+
+
+@mcp.tool()
+def update_task_box_item(
+    item_id: str,
+    summary: Optional[str] = None,
+    emoji_icon: Optional[str] = None,
+    routine: Optional[bool] = None,
+    reward_points: Optional[int] = None,
+    frame_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Update a task in the task bank."""
+    return _client().update_task_box_item(frame_id, item_id, summary, emoji_icon, routine, reward_points)
+
+
+@mcp.tool()
+def delete_task_box_item(item_id: str, frame_id: Optional[str] = None) -> Dict[str, Any]:
+    """Delete a task from the task bank."""
+    return _client().delete_task_box_item(frame_id, item_id)
+
+
+@mcp.tool()
+def get_chores(
+    after: Optional[str] = None,
+    before: Optional[str] = None,
+    include_late: Optional[bool] = None,
+    filter_profile: Optional[str] = None,
+    frame_id: Optional[str] = None,
+) -> Any:
+    """Get chores for a date range. Optionally filter by profile name. Dates are YYYY-MM-DD."""
+    return _client().get_chores(frame_id, after, before, include_late, filter_profile)
+
+
+@mcp.tool()
+def create_chore(
+    summary: str,
+    start: str,
+    routine: bool = False,
+    start_time: Optional[str] = None,
+    recurrence_set: Optional[str] = None,
+    emoji_icon: Optional[str] = None,
+    recurring_until: Optional[str] = None,
+    reward_points: Optional[int] = None,
+    category_ids: Optional[List[str]] = None,
+    category_id: Optional[str] = None,
+    profile_name: Optional[str] = None,
+    frame_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Create a scheduled chore or routine. Use profile_name to assign to a family member. start is YYYY-MM-DD. recurrence_set uses RRULE format."""
+    return _client().create_chore(
+        frame_id, summary, start, routine, start_time, recurrence_set,
+        emoji_icon, recurring_until, reward_points, category_ids, category_id, profile_name,
+    )
+
+
+@mcp.tool()
+def update_chore(
+    chore_id: str,
+    summary: Optional[str] = None,
+    emoji_icon: Optional[str] = None,
+    reward_points: Optional[int] = None,
+    start: Optional[str] = None,
+    start_time: Optional[str] = None,
+    recurrence_set: Optional[str] = None,
+    recurring_until: Optional[str] = None,
+    routine: Optional[bool] = None,
+    category_id: Optional[str] = None,
+    profile_name: Optional[str] = None,
+    up_for_grabs: Optional[bool] = None,
+    frame_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Update/reschedule a chore. Sends full object via PUT. For recurring chores, chore_id is composite: {series}-{date} or {series}-{date}-{time}."""
+    return _client().update_chore(
+        frame_id, chore_id, summary, emoji_icon, reward_points, start,
+        start_time, recurrence_set, recurring_until, routine, category_id, profile_name, up_for_grabs,
+    )
+
+
+@mcp.tool()
+def complete_chore(chore_id: str, frame_id: Optional[str] = None) -> Dict[str, Any]:
+    """Mark a chore as complete."""
+    return _client().complete_chore(frame_id, chore_id)
+
+
+@mcp.tool()
+def delete_chore(chore_id: str, apply_to: str = "one", frame_id: Optional[str] = None) -> Dict[str, Any]:
+    """Delete a chore instance or entire series. apply_to: 'one' or 'all'."""
+    return _client().delete_chore(frame_id, chore_id, apply_to)
+
+
+@mcp.tool()
 def get_meal_categories(frame_id: Optional[str] = None) -> List[Dict[str, Any]]:
     return _client().get_meal_categories(frame_id)
 
