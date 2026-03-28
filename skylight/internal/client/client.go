@@ -77,7 +77,8 @@ func (c *Client) Do(method, path string, pathParams, queryParams map[string]stri
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Token token=%q", c.token))
+	req.Header.Set("Authorization", fmt.Sprintf("Basic %s", c.token))
+	req.Header.Set("User-Agent", "SkylightMobile (web)")
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -100,10 +101,15 @@ func (c *Client) Do(method, path string, pathParams, queryParams map[string]stri
 	return respBody, nil
 }
 
-// LoginResponse is the response from POST /sessions.
+// LoginResponse is the JSON:API response from POST /sessions.
+// The API returns data.id (user_id) and data.attributes.token.
 type LoginResponse struct {
-	UserID    int    `json:"user_id"`
-	UserToken string `json:"user_token"`
+	Data struct {
+		ID         string `json:"id"`
+		Attributes struct {
+			Token string `json:"token"`
+		} `json:"attributes"`
+	} `json:"data"`
 }
 
 // Login authenticates with email and password, returning a base64 token string.
@@ -113,11 +119,9 @@ func Login(baseURL, email, password string) (string, error) {
 	}
 	baseURL = strings.TrimRight(baseURL, "/")
 
-	payload := map[string]interface{}{
-		"user": map[string]string{
-			"email":    email,
-			"password": password,
-		},
+	payload := map[string]string{
+		"email":    email,
+		"password": password,
 	}
 	data, _ := json.Marshal(payload)
 
@@ -126,6 +130,7 @@ func Login(baseURL, email, password string) (string, error) {
 		return "", fmt.Errorf("creating login request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "SkylightMobile (web)")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -142,11 +147,11 @@ func Login(baseURL, email, password string) (string, error) {
 	if err := json.Unmarshal(body, &lr); err != nil {
 		return "", fmt.Errorf("parsing login response: %w", err)
 	}
-	if lr.UserID == 0 || lr.UserToken == "" {
-		return "", fmt.Errorf("login response missing user_id or user_token")
+	if lr.Data.ID == "" || lr.Data.Attributes.Token == "" {
+		return "", fmt.Errorf("login response missing user id or token")
 	}
 
-	raw := fmt.Sprintf("%d:%s", lr.UserID, lr.UserToken)
+	raw := fmt.Sprintf("%s:%s", lr.Data.ID, lr.Data.Attributes.Token)
 	return base64.StdEncoding.EncodeToString([]byte(raw)), nil
 }
 
