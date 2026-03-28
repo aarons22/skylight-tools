@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/aarons22/skylight-mcp/skylight/internal/client"
+	"github.com/aarons22/skylight-tools/skylight/internal/client"
 	"github.com/spf13/cobra"
 )
 

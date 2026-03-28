@@ -1,4 +1,4 @@
-module github.com/aarons22/skylight-mcp/skylight
+module github.com/aarons22/skylight-tools/skylight
 
 go 1.21
 
