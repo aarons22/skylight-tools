@@ -1,0 +1,973 @@
+openapi: 3.0.3
+info:
+  title: Skylight Calendar API
+  description: |
+    Unofficial reverse-engineered API for the Skylight Calendar device.
+    Authentication uses a Base64-encoded token derived from email/password login.
+  version: 1.0.0
+
+servers:
+  - url: https://api.ourskylight.com/api
+    description: Primary API server
+  - url: https://app.ourskylight.com/api
+    description: Fallback API server
+
+components:
+  securitySchemes:
+    TokenAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: |
+        Token format: `Token token="<base64(user_id:user_token)>"`
+        Obtain token via POST /sessions.
+
+  schemas:
+    LoginRequest:
+      type: object
+      required: [user]
+      properties:
+        user:
+          type: object
+          required: [email, password]
+          properties:
+            email:
+              type: string
+              format: email
+            password:
+              type: string
+              format: password
+
+    LoginResponse:
+      type: object
+      properties:
+        user_id:
+          type: integer
+        user_token:
+          type: string
+
+    Frame:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+
+    FramesResponse:
+      type: object
+      properties:
+        frames:
+          type: array
+          items:
+            $ref: '#/components/schemas/Frame'
+
+    JsonApiAttributes:
+      type: object
+      additionalProperties: true
+
+    JsonApiResource:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        attributes:
+          $ref: '#/components/schemas/JsonApiAttributes'
+        relationships:
+          type: object
+          additionalProperties: true
+
+    JsonApiListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/JsonApiResource'
+        included:
+          type: array
+          items:
+            $ref: '#/components/schemas/JsonApiResource'
+        meta:
+          type: object
+          additionalProperties: true
+
+    JsonApiSingleResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/JsonApiResource'
+        included:
+          type: array
+          items:
+            $ref: '#/components/schemas/JsonApiResource'
+
+    ListItemAttributes:
+      type: object
+      properties:
+        name:
+          type: string
+        checked:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateListItemRequest:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [type, attributes]
+          properties:
+            type:
+              type: string
+              enum: [list_items]
+            attributes:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                checked:
+                  type: boolean
+                  default: false
+
+    UpdateListItemRequest:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [type, id, attributes]
+          properties:
+            type:
+              type: string
+              enum: [list_items]
+            id:
+              type: string
+            attributes:
+              type: object
+              properties:
+                name:
+                  type: string
+                checked:
+                  type: boolean
+
+    BulkDestroyRequest:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          items:
+            type: string
+
+    TaskBoxItemAttributes:
+      type: object
+      properties:
+        summary:
+          type: string
+        emoji_icon:
+          type: string
+        routine:
+          type: boolean
+        reward_points:
+          type: integer
+
+    CreateTaskBoxItemRequest:
+      type: object
+      required: [summary]
+      properties:
+        summary:
+          type: string
+        routine:
+          type: boolean
+          default: false
+        emoji_icon:
+          type: string
+        reward_points:
+          type: integer
+
+    UpdateTaskBoxItemRequest:
+      type: object
+      properties:
+        summary:
+          type: string
+        routine:
+          type: boolean
+        emoji_icon:
+          type: string
+        reward_points:
+          type: integer
+
+    CreateChoreRequest:
+      type: object
+      required: [summary, start, category_ids]
+      properties:
+        summary:
+          type: string
+        start:
+          type: string
+          format: date
+          description: Start date (YYYY-MM-DD)
+        routine:
+          type: boolean
+          default: false
+        category_ids:
+          type: array
+          items:
+            type: string
+          description: One or more category (profile) IDs; creates one chore per category
+        emoji_icon:
+          type: string
+        reward_points:
+          type: integer
+        start_time:
+          type: string
+          description: Optional time (HH:MM)
+        recurrence_set:
+          type: string
+          description: RRULE string (e.g. RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=SA)
+        recurring_until:
+          type: string
+          format: date
+          description: End date for recurring chores (YYYY-MM-DD)
+
+    UpdateChoreRequest:
+      type: object
+      properties:
+        summary:
+          type: string
+        emoji_icon:
+          type: string
+        reward_points:
+          type: integer
+        start:
+          type: string
+          format: date
+        recurrence_set:
+          type: string
+          nullable: true
+        category_id:
+          type: string
+        routine:
+          type: boolean
+        up_for_grabs:
+          type: boolean
+
+    CompleteChoreRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [complete]
+
+    MealRecipeAttributes:
+      type: object
+      properties:
+        summary:
+          type: string
+        description:
+          type: string
+          nullable: true
+
+    CreateMealRecipeRequest:
+      type: object
+      required: [meal_category_id, summary]
+      properties:
+        meal_category_id:
+          type: string
+        summary:
+          type: string
+        description:
+          type: string
+          nullable: true
+
+    CreateMealSittingRequest:
+      type: object
+      required: [meal_category_id, date]
+      properties:
+        meal_recipe_id:
+          type: string
+          nullable: true
+        meal_category_id:
+          type: string
+        add_to_grocery_list:
+          type: boolean
+          default: false
+        date:
+          type: string
+          format: date
+          description: Date of the sitting (YYYY-MM-DD)
+        note:
+          type: string
+          nullable: true
+        rrule:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+
+    RewardPoint:
+      type: object
+      properties:
+        category_id:
+          type: string
+        lifetime_points_earned:
+          type: integer
+        current_point_balance:
+          type: integer
+
+security:
+  - TokenAuth: []
+
+paths:
+  /sessions:
+    post:
+      summary: Login and obtain auth token
+      security: []
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Successful login
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+
+  /frames:
+    get:
+      summary: List all frames
+      operationId: listFrames
+      responses:
+        '200':
+          description: List of frames
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FramesResponse'
+
+  /frames/{frameId}/lists:
+    get:
+      summary: List all grocery/shopping lists for a frame
+      operationId: listLists
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of lists (JSON:API format)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiListResponse'
+
+  /frames/{frameId}/lists/{listId}/items:
+    get:
+      summary: List all items in a list
+      operationId: listItems
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: listId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List items (JSON:API format)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiListResponse'
+    post:
+      summary: Create a new list item
+      operationId: createListItem
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: listId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateListItemRequest'
+      responses:
+        '201':
+          description: Created list item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiSingleResponse'
+
+  /frames/{frameId}/lists/{listId}/items/{itemId}:
+    patch:
+      summary: Update a list item
+      operationId: updateListItem
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: listId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateListItemRequest'
+      responses:
+        '200':
+          description: Updated list item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiSingleResponse'
+
+  /frames/{frameId}/lists/{listId}/list_items/bulk_destroy:
+    delete:
+      summary: Bulk delete list items (only working deletion method)
+      operationId: deleteListItems
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: listId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkDestroyRequest'
+      responses:
+        '200':
+          description: Items deleted successfully
+
+  /frames/{frameId}/categories:
+    get:
+      summary: List family member profile categories
+      operationId: listCategories
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of categories (JSON:API format)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiListResponse'
+
+  /frames/{frameId}/reward_points:
+    get:
+      summary: Get reward point balances per category
+      operationId: getRewardPoints
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Reward points (plain array, not JSON:API)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RewardPoint'
+
+  /frames/{frameId}/task_box/items:
+    get:
+      summary: List task box items
+      operationId: listTaskBoxItems
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task box items (JSON:API format)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiListResponse'
+    post:
+      summary: Create a task box item
+      operationId: createTaskBoxItem
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskBoxItemRequest'
+      responses:
+        '201':
+          description: Created task box item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiSingleResponse'
+
+  /frames/{frameId}/task_box/items/{itemId}:
+    patch:
+      summary: Update a task box item
+      operationId: updateTaskBoxItem
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskBoxItemRequest'
+      responses:
+        '200':
+          description: Updated task box item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiSingleResponse'
+    delete:
+      summary: Delete a task box item
+      operationId: deleteTaskBoxItem
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted successfully
+
+  /frames/{frameId}/chores:
+    get:
+      summary: List chores with optional date range and category filters
+      operationId: listChores
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: after
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Start date filter (YYYY-MM-DD)
+        - name: before
+          in: query
+          schema:
+            type: string
+            format: date
+          description: End date filter (YYYY-MM-DD)
+        - name: include_late
+          in: query
+          schema:
+            type: boolean
+          description: Include overdue chores
+        - name: category_id
+          in: query
+          schema:
+            type: string
+          description: Filter by profile/category ID
+      responses:
+        '200':
+          description: Chores (JSON:API format)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiListResponse'
+
+  /frames/{frameId}/chores/create_multiple:
+    post:
+      summary: Create one or more chores (one per category_id)
+      operationId: createChore
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateChoreRequest'
+      responses:
+        '201':
+          description: Created chores
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiListResponse'
+
+  /frames/{frameId}/chores/{choreId}:
+    put:
+      summary: Update a chore (full object) or complete it
+      operationId: updateChore
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: choreId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: |
+            Non-recurring: numeric ID (e.g. 72279767).
+            Recurring instance: composite ID (e.g. 72279767-2026-03-21).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/UpdateChoreRequest'
+                - $ref: '#/components/schemas/CompleteChoreRequest'
+      responses:
+        '200':
+          description: Updated chore
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiSingleResponse'
+    delete:
+      summary: Delete a chore
+      operationId: deleteChore
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: choreId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: apply_to
+          in: query
+          schema:
+            type: string
+            enum: [one, all]
+          description: Delete single instance (one) or entire series (all)
+      responses:
+        '200':
+          description: Deleted successfully
+
+  /frames/{frameId}/meals/categories:
+    get:
+      summary: List meal categories (Breakfast, Lunch, Dinner, Snack)
+      operationId: listMealCategories
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Meal categories (JSON:API format)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiListResponse'
+
+  /frames/{frameId}/meals/recipes:
+    get:
+      summary: List meal recipes
+      operationId: listMealRecipes
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: include
+          in: query
+          schema:
+            type: string
+          description: Include related resources (e.g. meal_category)
+      responses:
+        '200':
+          description: Meal recipes (JSON:API format)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiListResponse'
+    post:
+      summary: Create a meal recipe
+      operationId: createMealRecipe
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: include
+          in: query
+          schema:
+            type: string
+          description: Include related resources (e.g. meal_category)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMealRecipeRequest'
+      responses:
+        '201':
+          description: Created meal recipe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiSingleResponse'
+
+  /frames/{frameId}/meals/recipes/{recipeId}:
+    get:
+      summary: Get a single meal recipe
+      operationId: getMealRecipe
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: recipeId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: include
+          in: query
+          schema:
+            type: string
+          description: Include related resources (e.g. meal_category)
+      responses:
+        '200':
+          description: Meal recipe (JSON:API format)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiSingleResponse'
+
+  /frames/{frameId}/meals/recipes/{recipeId}/add_to_grocery_list:
+    post:
+      summary: Add recipe ingredients to grocery list
+      operationId: addRecipeToGroceryList
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: recipeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Recipe added to grocery list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiSingleResponse'
+
+  /frames/{frameId}/meals/sittings:
+    get:
+      summary: List meal sittings in a date range
+      operationId: listMealSittings
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: date_min
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Start date (YYYY-MM-DD)
+        - name: date_max
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: End date (YYYY-MM-DD)
+        - name: include
+          in: query
+          schema:
+            type: string
+          description: Include related resources (e.g. meal_category,meal_recipe)
+      responses:
+        '200':
+          description: Meal sittings (JSON:API format)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiListResponse'
+    post:
+      summary: Create a meal sitting
+      operationId: createMealSitting
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: date_min
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_max
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: include
+          in: query
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMealSittingRequest'
+      responses:
+        '201':
+          description: Created meal sitting
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiListResponse'
+
+  /frames/{frameId}/meals/sittings/{sittingId}/instances/{date}:
+    delete:
+      summary: Delete a meal sitting instance
+      operationId: deleteMealSitting
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: sittingId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: date
+          in: path
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Date of the instance to delete (YYYY-MM-DD)
+        - name: date_min
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_max
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: include
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Sitting instance deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiListResponse'
