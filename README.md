@@ -17,8 +17,8 @@ Tools for interacting with the [Skylight Calendar](https://www.ourskylight.com).
 **Build from source** (requires Go 1.21+):
 
 ```bash
-git clone https://github.com/aarons22/skylight-mcp
-cd skylight-mcp/skylight
+git clone https://github.com/aarons22/skylight-tools
+cd skylight-tools/skylight
 go build -o skylight .
 mv skylight /usr/local/bin/
 ```
@@ -26,7 +26,7 @@ mv skylight /usr/local/bin/
 **go install** (once the repo is tagged):
 
 ```bash
-go install github.com/aarons22/skylight-mcp/skylight@latest
+go install github.com/aarons22/skylight-tools/skylight@latest
 ```
 
 ### Authenticate
@@ -101,7 +101,7 @@ FastMCP server that exposes Skylight data as tools for AI agents (Claude, Cursor
 ### Quick Install (macOS)
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/aarons22/skylight-mcp/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/aarons22/skylight-tools/main/install.sh | bash
 ```
 
 Then run:

@@ -2,8 +2,8 @@
 set -euo pipefail
 
 APP_NAME="skylight-mcp"
-DEFAULT_REPO_URL="https://github.com/aarons22/skylight-mcp"
-DEFAULT_INSTALL_DIR="$HOME/.local/skylight-mcp"
+DEFAULT_REPO_URL="https://github.com/aarons22/skylight-tools"
+DEFAULT_INSTALL_DIR="$HOME/.local/skylight-tools"
 
 REPO_URL="${REPO_URL:-$DEFAULT_REPO_URL}"
 INSTALL_DIR="${INSTALL_DIR:-$DEFAULT_INSTALL_DIR}"
