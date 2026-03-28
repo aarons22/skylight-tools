@@ -23,6 +23,12 @@ go build -o skylight .
 mv skylight /usr/local/bin/
 ```
 
+**go install** (once the repo is tagged):
+
+```bash
+go install github.com/aarons22/skylight-mcp/skylight@latest
+```
+
 ### Authenticate
 
 ```bash
