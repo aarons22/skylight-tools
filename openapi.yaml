@@ -19,32 +19,45 @@ components:
       in: header
       name: Authorization
       description: |
-        Token format: `Token token="<base64(user_id:user_token)>"`
+        Token format: `Basic <base64(user_id:user_token)>`
         Obtain token via POST /sessions.
+        Note: use `Basic` (HTTP Basic Auth style), NOT `Token token="..."`.
+        Required companion header: `User-Agent: SkylightMobile (web)`
 
   schemas:
     LoginRequest:
       type: object
-      required: [user]
+      description: |
+        Flat JSON body — do NOT nest under a "user" key (causes 500).
+      required: [email, password]
       properties:
-        user:
-          type: object
-          required: [email, password]
-          properties:
-            email:
-              type: string
-              format: email
-            password:
-              type: string
-              format: password
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
 
     LoginResponse:
       type: object
+      description: |
+        JSON:API format. Extract user_id from data.id and token from data.attributes.token.
+        Token usage: base64(user_id + ":" + token), sent as `Basic <base64>` in Authorization header.
       properties:
-        user_id:
-          type: integer
-        user_token:
-          type: string
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              description: User ID
+            type:
+              type: string
+            attributes:
+              type: object
+              properties:
+                token:
+                  type: string
+                  description: Auth token (combine with user ID for Basic auth)
 
     Frame:
       type: object
@@ -382,7 +395,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/JsonApiListResponse'
 
-  /frames/{frameId}/lists/{listId}/items:
+  /frames/{frameId}/lists/{listId}/list_items:
     get:
       summary: List all items in a list
       operationId: listItems
@@ -432,7 +445,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/JsonApiSingleResponse'
 
-  /frames/{frameId}/lists/{listId}/items/{itemId}:
+  /frames/{frameId}/lists/{listId}/list_items/{itemId}:
     patch:
       summary: Update a list item
       operationId: updateListItem

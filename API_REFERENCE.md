@@ -514,32 +514,41 @@ Authorization: Bearer <token>
 ```http
 POST /sessions
 Content-Type: application/json
+User-Agent: SkylightMobile (web)
 
 {
-  "user": {
-    "email": "user@example.com",
-    "password": "password"
+  "email": "user@example.com",
+  "password": "password"
+}
+```
+
+Note: body must be *flat* JSON — nesting under `"user"` key causes HTTP 500.
+
+**Response (JSON:API format):**
+```json
+{
+  "data": {
+    "id": "12345",
+    "type": "users",
+    "attributes": {
+      "token": "abc123xyz789..."
+    }
   }
 }
 ```
 
-**Response:**
-```json
-{
-  "user_id": 12345,
-  "user_token": "abc123xyz789..."
-}
-```
-
 **Usage:**
+- Extract: `user_id = data.id`, `token = data.attributes.token`
 - Encode as Base64: `12345:abc123xyz789` → `MTIzNDU6YWJjMTIzeHl6Nzg5`
-- Use in Authorization header: `Token token="MTIzNDU6YWJjMTIzeHl6Nzg5"`
+- Use in Authorization header: `Basic MTIzNDU6YWJjMTIzeHl6Nzg5`
+- All subsequent requests also require: `User-Agent: SkylightMobile (web)`
 
 #### Get Frames
 **Request:**
 ```http
 GET /frames
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
+User-Agent: SkylightMobile (web)
 ```
 
 **Response:**
@@ -562,7 +571,7 @@ Authorization: Token token="<base64_token>"
 **Request:**
 ```http
 GET /frames/{frameId}/lists
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 ```
 
 **Response (JSON:API format):**
@@ -586,7 +595,7 @@ Authorization: Token token="<base64_token>"
 **Request:**
 ```http
 GET /frames/{frameId}/lists/{listId}/items
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 ```
 
 **Response:**
@@ -611,7 +620,7 @@ Authorization: Token token="<base64_token>"
 **Request:**
 ```http
 POST /frames/{frameId}/lists/{listId}/items
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 Content-Type: application/json
 
 {
@@ -645,7 +654,7 @@ Content-Type: application/json
 **Request:**
 ```http
 PATCH /frames/{frameId}/lists/{listId}/items/{itemId}
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 Content-Type: application/json
 
 {
@@ -664,7 +673,7 @@ Content-Type: application/json
 **Request:**
 ```http
 DELETE /frames/{frameId}/lists/{listId}/items/{itemId}
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 ```
 
 **Status:** ❌ **NOT WORKING** - Endpoint exists but deletion does not occur
@@ -673,7 +682,7 @@ Authorization: Token token="<base64_token>"
 **Request:**
 ```http
 DELETE /frames/{frameId}/lists/{listId}/list_items/bulk_destroy
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 Content-Type: application/json
 
 {
@@ -696,7 +705,7 @@ Content-Type: application/json
 **Request:**
 ```http
 GET /frames/{frameId}/meals/recipes?include=meal_category
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 ```
 
 **Response:**
@@ -749,7 +758,7 @@ Authorization: Token token="<base64_token>"
 **Request:**
 ```http
 GET /frames/{frameId}/meals/recipes/{recipeId}?include=meal_category
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 ```
 
 **Response:**
@@ -787,7 +796,7 @@ Authorization: Token token="<base64_token>"
 **Request:**
 ```http
 POST /frames/{frameId}/meals/recipes?include=meal_category
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 Content-Type: application/json
 
 {
@@ -839,7 +848,7 @@ Content-Type: application/json
 **Request:**
 ```http
 POST /frames/{frameId}/meals/recipes/{recipeId}/add_to_grocery_list
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 ```
 
 **Response:**
@@ -867,7 +876,7 @@ Authorization: Token token="<base64_token>"
 **Request:**
 ```http
 GET /frames/{frameId}/meals/categories
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 ```
 
 **Response:**
@@ -922,7 +931,7 @@ Authorization: Token token="<base64_token>"
 **Request:**
 ```http
 GET /frames/{frameId}/meals/sittings?date_min=2026-03-01&date_max=2026-04-01&include=meal_category,meal_recipe
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 ```
 
 **Response:**
@@ -994,7 +1003,7 @@ Authorization: Token token="<base64_token>"
 **Request:**
 ```http
 POST /frames/{frameId}/meals/sittings?date_min=2026-03-01&date_max=2026-04-01&include=meal_category,meal_recipe
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 Content-Type: application/json
 
 {
@@ -1074,14 +1083,14 @@ Content-Type: application/json
 **Request:**
 ```http
 GET /frames/{frameId}/meals/sittings/{sittingId}/instances?date_min=2026-03-01&date_max=2026-04-01&include=meal_category,meal_recipe
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 ```
 
 #### Delete Meal Sitting Instance
 **Request:**
 ```http
 DELETE /frames/{frameId}/meals/sittings/{sittingId}/instances/{date}?date_min=2026-03-01&date_max=2026-04-01&include=meal_category,meal_recipe
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 ```
 
 **Response:**
@@ -1116,7 +1125,7 @@ Tasks can be either "chores" or "routines" (distinguished by a `routine` boolean
 **Request:**
 ```http
 GET /frames/{frameId}/categories
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 ```
 
 **Response:**
@@ -1157,7 +1166,7 @@ Authorization: Token token="<base64_token>"
 **Request:**
 ```http
 GET /frames/{frameId}/reward_points
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 ```
 
 **Response (plain array, not JSON:API wrapped):**
@@ -1184,7 +1193,7 @@ Authorization: Token token="<base64_token>"
 **Request:**
 ```http
 GET /frames/{frameId}/task_box/items
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 ```
 
 **Response:**
@@ -1209,7 +1218,7 @@ Authorization: Token token="<base64_token>"
 **Request:**
 ```http
 POST /frames/{frameId}/task_box/items
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 Content-Type: application/json
 
 {
@@ -1224,7 +1233,7 @@ Content-Type: application/json
 **Request:**
 ```http
 PATCH /frames/{frameId}/task_box/items/{itemId}
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 Content-Type: application/json
 
 {
@@ -1237,7 +1246,7 @@ Content-Type: application/json
 **Request:**
 ```http
 DELETE /frames/{frameId}/task_box/items/{itemId}
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 ```
 
 ---
@@ -1248,7 +1257,7 @@ Authorization: Token token="<base64_token>"
 **Request:**
 ```http
 GET /frames/{frameId}/chores?after=2026-03-01&before=2026-03-31&include_late=true&category_id=cat_123
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 ```
 
 **Query Parameters:**
@@ -1261,7 +1270,7 @@ Authorization: Token token="<base64_token>"
 **Request:**
 ```http
 POST /frames/{frameId}/chores/create_multiple
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 Content-Type: application/json
 
 {
@@ -1286,7 +1295,7 @@ Content-Type: application/json
 **Request:**
 ```http
 PUT /frames/{frameId}/chores/{choreId}
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 Content-Type: application/json
 
 {
@@ -1313,7 +1322,7 @@ Content-Type: application/json
 **Request:**
 ```http
 PUT /frames/{frameId}/chores/{choreId}
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 Content-Type: application/json
 
 {
@@ -1325,7 +1334,7 @@ Content-Type: application/json
 **Request:**
 ```http
 DELETE /frames/{frameId}/chores/{choreId}?apply_to=one
-Authorization: Token token="<base64_token>"
+Authorization: Basic <base64_token>
 ```
 
 **Query Parameters:**
