@@ -30,7 +30,7 @@ var listsListItemsCmd = &cobra.Command{
 		}
 
 		c := client.NewClient(baseURL, token)
-		resp, err := c.Do("GET", "/frames/{frameId}/lists/{listId}/items",
+		resp, err := c.Do("GET", "/frames/{frameId}/lists/{listId}/list_items",
 			map[string]string{"frameId": frameID, "listId": listsListItemsListID}, nil, nil)
 		if err != nil {
 			return err

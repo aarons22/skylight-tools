@@ -44,7 +44,7 @@ var listsCreateItemCmd = &cobra.Command{
 		}
 
 		c := client.NewClient(baseURL, token)
-		resp, err := c.Do("POST", "/frames/{frameId}/lists/{listId}/items",
+		resp, err := c.Do("POST", "/frames/{frameId}/lists/{listId}/list_items",
 			map[string]string{"frameId": frameID, "listId": listsCreateItemListID}, nil, body)
 		if err != nil {
 			return err

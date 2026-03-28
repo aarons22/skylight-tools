@@ -77,7 +77,8 @@ func (c *Client) Do(method, path string, pathParams, queryParams map[string]stri
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Token token=%q", c.token))
+	req.Header.Set("Authorization", fmt.Sprintf("Basic %s", c.token))
+	req.Header.Set("User-Agent", "SkylightMobile (web)")
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -113,11 +114,9 @@ func Login(baseURL, email, password string) (string, error) {
 	}
 	baseURL = strings.TrimRight(baseURL, "/")
 
-	payload := map[string]interface{}{
-		"user": map[string]string{
-			"email":    email,
-			"password": password,
-		},
+	payload := map[string]string{
+		"email":    email,
+		"password": password,
 	}
 	data, _ := json.Marshal(payload)
 
@@ -126,6 +125,7 @@ func Login(baseURL, email, password string) (string, error) {
 		return "", fmt.Errorf("creating login request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "SkylightMobile (web)")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

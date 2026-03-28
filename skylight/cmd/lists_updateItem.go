@@ -52,7 +52,7 @@ var listsUpdateItemCmd = &cobra.Command{
 		}
 
 		c := client.NewClient(baseURL, token)
-		resp, err := c.Do("PATCH", "/frames/{frameId}/lists/{listId}/items/{itemId}",
+		resp, err := c.Do("PATCH", "/frames/{frameId}/lists/{listId}/list_items/{itemId}",
 			map[string]string{
 				"frameId": frameID,
 				"listId":  listsUpdateItemListID,
