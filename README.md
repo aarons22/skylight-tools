@@ -178,3 +178,17 @@ $HOME/.local/bin/skylight-mcp --help
 `openapi.yaml` is the authoritative machine-readable definition of the Skylight API. It covers authentication, frames, lists, categories, reward points, task box, chores, and meal planning.
 
 Use it with any OpenAPI-compatible tooling — code generators, HTTP clients, or documentation renderers.
+
+---
+
+## Development
+
+### Updating the OpenAPI spec
+
+`openapi.yaml` is the source of truth. When it changes, regenerate the Go CLI using [commandspec](https://github.com/theaiteam-dev/commandspec), then reapply the hand-written customizations listed in `CLAUDE.md`. Do not edit `skylight/cmd/` files directly.
+
+The Python MCP (`skylight_mcp/`) is edited directly — it is not generated.
+
+### Validating changes
+
+See `AGENTS.md` for the E2E validation sequence for each component.

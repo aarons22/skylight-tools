@@ -1,27 +1,75 @@
 # AGENTS
 
-## End-to-End Validation (Required)
-When making changes that affect Skylight auth, network handling, or the MCP server runtime, run a local end-to-end validation before declaring success.
+End-to-end validation procedures. Run the relevant section after making changes.
 
-**Minimum E2E sequence:**
-1. `python - <<'PY'`
-   from skylight_mcp.client import SkylightClient
-   from skylight_mcp.config import get_settings, token_cache_path
+---
 
-   settings = get_settings()
-   client = SkylightClient(
-       email=settings.skylight_email,
-       password=settings.skylight_password,
-       token_cache_path=token_cache_path(),
-       default_frame_id=settings.skylight_frame_id,
-   )
-   frames = client.get_frames()
-   print("frames:", frames)
-   print("count:", len(frames) if isinstance(frames, list) else "n/a")
-   PY
+## Go CLI
 
-2. `skylight-mcp run` and verify the server starts without errors in logs.
+After changes to `skylight/`, verify the binary builds and authenticates:
+
+```bash
+cd skylight && go build -o skylight . && echo "build ok"
+```
+
+Smoke test (requires `~/.config/skylight/config.yaml` with a saved token):
+
+```bash
+./skylight frames listFrames
+./skylight lists listLists
+```
+
+If no config exists, authenticate first:
+
+```bash
+./skylight account login --email "$SKYLIGHT_EMAIL" --password "$SKYLIGHT_PASSWORD"
+```
+
+---
+
+## OpenAPI → commandspec Regeneration
+
+After editing `openapi.yaml` and running commandspec to regenerate `skylight/cmd/`:
+
+1. Verify the following files still contain their hand-written customizations (see CLAUDE.md for details):
+   - `skylight/internal/client/client.go`
+   - `skylight/internal/output/output.go`
+   - `skylight/cmd/root.go` (persistent flags)
+   - `skylight/cmd/account_login.go` (YAML token save)
+
+2. Rebuild and run the CLI smoke test above.
+
+---
+
+## Python MCP Server
+
+After changes to `skylight_mcp/`, run a client smoke test:
+
+```bash
+python - <<'PY'
+from skylight_mcp.client import SkylightClient
+from skylight_mcp.config import get_settings, token_cache_path
+
+settings = get_settings()
+client = SkylightClient(
+    email=settings.skylight_email,
+    password=settings.skylight_password,
+    token_cache_path=token_cache_path(),
+    default_frame_id=settings.skylight_frame_id,
+)
+frames = client.get_frames()
+print("frames:", frames)
+print("count:", len(frames) if isinstance(frames, list) else "n/a")
+PY
+```
+
+Then verify the server starts:
+
+```bash
+skylight-mcp run
+```
 
 **Notes:**
-- If DNS issues occur for `api.ourskylight.com`, ensure fallback to `app.ourskylight.com` is exercised.
-- If auth fails, verify the login payloads (`user` wrapper and flat email/password) and JSON:API parsing.
+- `SKYLIGHT_EMAIL` and `SKYLIGHT_PASSWORD` may be available as env vars or in a local `.env` file.
+- If DNS resolution fails for `api.ourskylight.com`, the client should fall back to `app.ourskylight.com`.
+- If auth fails, verify the login payload (flat `email`/`password`) and JSON:API response parsing.
