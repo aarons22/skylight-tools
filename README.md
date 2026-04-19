@@ -23,10 +23,16 @@ go build -o skylight .
 mv skylight /usr/local/bin/
 ```
 
-**go install** (once the repo is tagged):
+**go install** (requires `~/go/bin` on your PATH):
 
 ```bash
 go install github.com/aarons22/skylight-tools/skylight@latest
+```
+
+If `skylight` isn't found after install, add Go's bin directory to your PATH:
+
+```bash
+echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zshrc && source ~/.zshrc
 ```
 
 ### Authenticate
