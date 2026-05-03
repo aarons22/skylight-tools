@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import base64
 import json
 import os
+import time
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -13,13 +13,14 @@ import httpx
 
 @dataclass
 class SkylightAuth:
-    user_id: str
-    user_token: str
+    access_token: str
+    refresh_token: str
 
 
 class SkylightClient:
-    DEFAULT_BASE_URL = "https://api.ourskylight.com/api"
-    DEFAULT_FALLBACK_BASE_URL = "https://app.ourskylight.com/api"
+    BASE_URL = "https://app.ourskylight.com/api"
+    OAUTH_URL = "https://app.ourskylight.com/oauth/token"
+    CLIENT_ID = "skylight-mobile"
 
     def __init__(
         self,
@@ -30,8 +31,6 @@ class SkylightClient:
     ) -> None:
         self.email = email
         self.password = password
-        self.base_url = self.DEFAULT_BASE_URL
-        self.fallback_base_url = self.DEFAULT_FALLBACK_BASE_URL
         self.token_cache_path = token_cache_path
         self.default_frame_id = default_frame_id
         self._auth: Optional[SkylightAuth] = None
@@ -47,58 +46,49 @@ class SkylightClient:
             data = json.loads(self.token_cache_path.read_text())
             if data.get("email") != self.email:
                 return None
-            user_id = str(data.get("user_id")) if data.get("user_id") else None
-            user_token = data.get("user_token")
-            if user_id and user_token:
-                return SkylightAuth(user_id=user_id, user_token=user_token)
+            access_token = data.get("access_token")
+            refresh_token = data.get("refresh_token")
+            expires_at = data.get("expires_at", 0)
+            if not access_token or not refresh_token:
+                return None
+            # If token is expired (or about to expire in 60s), try to refresh
+            if time.time() >= expires_at - 60:
+                return self._do_refresh(refresh_token)
+            return SkylightAuth(access_token=access_token, refresh_token=refresh_token)
         except Exception:
             return None
-        return None
 
-    def _cache_token(self, auth: SkylightAuth) -> None:
+    def _cache_token(self, auth: SkylightAuth, expires_in: int = 7200) -> None:
         payload = {
             "email": self.email,
-            "user_id": auth.user_id,
-            "user_token": auth.user_token,
+            "access_token": auth.access_token,
+            "refresh_token": auth.refresh_token,
+            "expires_at": int(time.time()) + expires_in,
         }
         self.token_cache_path.write_text(json.dumps(payload))
         os.chmod(self.token_cache_path, 0o600)
 
-    def _login(self, base_url: str) -> SkylightAuth:
-        url = f"{base_url}/sessions"
-        payloads = [
-            {"user": {"email": self.email, "password": self.password}},
-            {"email": self.email, "password": self.password},
-        ]
-        last_error: Optional[Exception] = None
-
-        for payload in payloads:
-            try:
-                resp = self._client.post(url, json=payload)
-                resp.raise_for_status()
-                data = resp.json()
-
-                # Legacy response
-                user_id = data.get("user_id") or data.get("id")
-                user_token = data.get("user_token") or data.get("token") or data.get("auth_token")
-
-                # JSON:API response
-                if not user_id or not user_token:
-                    data_obj = data.get("data") if isinstance(data, dict) else None
-                    attrs = data_obj.get("attributes", {}) if isinstance(data_obj, dict) else {}
-                    user_id = user_id or data_obj.get("id") if isinstance(data_obj, dict) else None
-                    user_token = user_token or attrs.get("user_token") or attrs.get("token") or attrs.get("auth_token")
-
-                if user_id and user_token:
-                    return SkylightAuth(user_id=str(user_id), user_token=str(user_token))
-            except Exception as exc:
-                last_error = exc
-
-        if isinstance(last_error, httpx.RequestError):
-            raise last_error
-        if isinstance(last_error, httpx.HTTPStatusError):
-            raise last_error
-        raise ValueError("Login response missing user_id/user_token") from last_error
+    def _do_refresh(self, refresh_token: str) -> Optional[SkylightAuth]:
+        try:
+            resp = self._client.post(
+                self.OAUTH_URL,
+                data={
+                    "grant_type": "refresh_token",
+                    "client_id": self.CLIENT_ID,
+                    "refresh_token": refresh_token,
+                    "scope": "everything",
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            auth = SkylightAuth(
+                access_token=data["access_token"],
+                refresh_token=data.get("refresh_token", refresh_token),
+            )
+            self._cache_token(auth, expires_in=data.get("expires_in", 7200))
+            return auth
+        except Exception:
+            return None
 
     def _ensure_auth(self) -> SkylightAuth:
         if self._auth:
@@ -107,29 +97,11 @@ class SkylightClient:
         if cached:
             self._auth = cached
             return cached
-        try:
-            auth = self._login(self.base_url)
-        except httpx.RequestError:
-            auth = self._login(self.fallback_base_url)
-            self.base_url = self.fallback_base_url
-        except httpx.HTTPStatusError as exc:
-            status = exc.response.status_code if exc.response is not None else None
-            if status in (404, 502, 503, 504):
-                auth = self._login(self.fallback_base_url)
-                self.base_url = self.fallback_base_url
-            else:
-                raise
-        self._cache_token(auth)
-        self._auth = auth
-        return auth
-
-    def _token_header(self, auth: SkylightAuth) -> str:
-        token = base64.b64encode(f"{auth.user_id}:{auth.user_token}".encode()).decode()
-        return f'Token token="{token}"'
-
-    def _basic_header(self, auth: SkylightAuth) -> str:
-        token = base64.b64encode(f"{auth.user_id}:{auth.user_token}".encode()).decode()
-        return f"Basic {token}"
+        raise ValueError(
+            "No valid Skylight token found. Log in via the Skylight web app, then export the "
+            "Bearer token to SKYLIGHT_TOKEN or update the token cache at "
+            f"{self.token_cache_path}."
+        )
 
     def _request(
         self,
@@ -139,42 +111,28 @@ class SkylightClient:
         params: Optional[Dict[str, Any]] = None,
     ) -> Any:
         auth = self._ensure_auth()
-        url = f"{self.base_url}{endpoint}"
-        use_basic = self.base_url == self.fallback_base_url
+        url = f"{self.BASE_URL}{endpoint}"
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "Authorization": self._basic_header(auth) if use_basic else self._token_header(auth),
-            "User-Agent": "SkylightMCP",
+            "Authorization": f"Bearer {auth.access_token}",
+            "User-Agent": "SkylightMobile (web)",
         }
 
-        try:
-            resp = self._client.request(method, url, json=json_body, params=params, headers=headers)
-        except httpx.RequestError:
-            # Retry with fallback host + Basic auth
-            fallback_url = f"{self.fallback_base_url}{endpoint}"
-            headers["Authorization"] = self._basic_header(auth)
-            resp = self._client.request(method, fallback_url, json=json_body, params=params, headers=headers)
-            self.base_url = self.fallback_base_url
-
-        if resp.status_code in (401, 404):
-            # Retry once with fallback host and Basic auth
-            fallback_url = f"{self.fallback_base_url}{endpoint}"
-            headers["Authorization"] = self._basic_header(auth)
-            resp = self._client.request(method, fallback_url, json=json_body, params=params, headers=headers)
-            self.base_url = self.fallback_base_url
+        resp = self._client.request(method, url, json=json_body, params=params, headers=headers)
 
         if resp.status_code == 401:
-            # token may be stale; clear and retry once
-            self._auth = None
-            if self.token_cache_path.exists():
-                self.token_cache_path.unlink()
-            auth = self._ensure_auth()
-            headers["Authorization"] = (
-                self._basic_header(auth) if self.base_url == self.fallback_base_url else self._token_header(auth)
-            )
-            url = f"{self.base_url}{endpoint}"
-            resp = self._client.request(method, url, json=json_body, params=params, headers=headers)
+            # Token expired — attempt refresh and retry once
+            data = json.loads(self.token_cache_path.read_text()) if self.token_cache_path.exists() else {}
+            refreshed = self._do_refresh(data.get("refresh_token", ""))
+            if refreshed:
+                self._auth = refreshed
+                headers["Authorization"] = f"Bearer {refreshed.access_token}"
+                resp = self._client.request(method, url, json=json_body, params=params, headers=headers)
+            else:
+                self._auth = None
+                if self.token_cache_path.exists():
+                    self.token_cache_path.unlink()
 
         resp.raise_for_status()
         if not resp.text.strip():
@@ -183,20 +141,7 @@ class SkylightClient:
 
     # ---- Frames ----
     def get_frames(self) -> List[Dict[str, Any]]:
-        # Some environments use /frames, others /frames/calendar
-        try:
-            result = self._request("GET", "/frames")
-            if isinstance(result, dict):
-                if "frames" in result:
-                    return result["frames"]
-                if "data" in result:
-                    return result["data"]
-            if isinstance(result, list):
-                return result
-        except httpx.HTTPStatusError:
-            pass
-
-        result = self._request("GET", "/frames/calendar")
+        result = self._request("GET", "/frames")
         if isinstance(result, dict):
             return result.get("data", [])
         if isinstance(result, list):

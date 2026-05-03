@@ -3,77 +3,57 @@ info:
   title: Skylight Calendar API
   description: |
     Unofficial reverse-engineered API for the Skylight Calendar device.
-    Authentication uses a Base64-encoded token derived from email/password login.
+
+    ## Authentication
+
+    Full OAuth 2.0 Authorization Code flow:
+
+    1. `GET /auth/session/new` — fetch the login page; extract the CSRF token from
+       `<meta name="csrf-token" content="...">`.
+    2. `POST /auth/session` — submit credentials (form-encoded) with the CSRF token.
+       Server responds 302 → `/auth/session/success`; the authorization code is
+       issued as part of the resulting session.
+    3. `POST /oauth/token` — exchange the authorization code for a Bearer token.
+    4. All API calls use `Authorization: Bearer <access_token>`.
+
+    Tokens expire in 7200 seconds. Use the `refresh_token` with
+    `grant_type=refresh_token` at `POST /oauth/token` to renew without re-logging in.
+
+    > Note: `api.ourskylight.com` does not resolve. `app.ourskylight.com` is the sole active host.
   version: 1.0.0
 
 servers:
-  - url: https://api.ourskylight.com/api
-    description: Primary API server
-  - url: https://app.ourskylight.com/api
-    description: Fallback API server
+  - url: https://app.ourskylight.com
+    description: Skylight API server
 
 components:
   securitySchemes:
-    TokenAuth:
-      type: apiKey
-      in: header
-      name: Authorization
+    BearerAuth:
+      type: http
+      scheme: bearer
       description: |
-        Token format: `Basic <base64(user_id:user_token)>`
-        Obtain token via POST /sessions.
-        Note: use `Basic` (HTTP Basic Auth style), NOT `Token token="..."`.
+        OAuth 2.0 Bearer token obtained from `POST /oauth/token`.
         Required companion header: `User-Agent: SkylightMobile (web)`
 
   schemas:
-    LoginRequest:
-      type: object
-      description: |
-        Flat JSON body — do NOT nest under a "user" key (causes 500).
-      required: [email, password]
-      properties:
-        email:
-          type: string
-          format: email
-        password:
-          type: string
-          format: password
-
-    LoginResponse:
-      type: object
-      description: |
-        JSON:API format. Extract user_id from data.id and token from data.attributes.token.
-        Token usage: base64(user_id + ":" + token), sent as `Basic <base64>` in Authorization header.
-      properties:
-        data:
-          type: object
-          properties:
-            id:
-              type: string
-              description: User ID
-            type:
-              type: string
-            attributes:
-              type: object
-              properties:
-                token:
-                  type: string
-                  description: Auth token (combine with user ID for Basic auth)
-
-    Frame:
+    OAuthTokenResponse:
       type: object
       properties:
-        id:
+        access_token:
           type: string
-        name:
+        token_type:
           type: string
-
-    FramesResponse:
-      type: object
-      properties:
-        frames:
-          type: array
-          items:
-            $ref: '#/components/schemas/Frame'
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          description: Lifetime in seconds (7200)
+        refresh_token:
+          type: string
+        scope:
+          type: string
+        created_at:
+          type: integer
+          description: Unix timestamp
 
     JsonApiAttributes:
       type: object
@@ -116,6 +96,288 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/JsonApiResource'
+
+    UserAttributes:
+      type: object
+      properties:
+        subscription_status:
+          type: string
+        trial_days_remaining:
+          type: integer
+          nullable: true
+        profile:
+          type: object
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            birthday:
+              type: string
+              nullable: true
+            created_at:
+              type: string
+              format: date-time
+            updated_at:
+              type: string
+              format: date-time
+        agreed_to_marketing:
+          type: boolean
+        phone:
+          type: string
+          nullable: true
+        trial_expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        notification_preference:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        plus_billing_provider:
+          type: string
+          nullable: true
+        birthday:
+          type: string
+          nullable: true
+        was_plus_purchaser:
+          type: boolean
+        dunning_since:
+          type: string
+          nullable: true
+        dunning_since_date:
+          type: string
+          nullable: true
+        email:
+          type: string
+
+    FrameAttributes:
+      type: object
+      properties:
+        name:
+          type: string
+        open_to_public:
+          type: boolean
+        message_viewability:
+          type: string
+        apps:
+          type: array
+          items:
+            type: string
+        timezone:
+          type: string
+        destroyed_at:
+          type: string
+          format: date-time
+          nullable: true
+        household_name:
+          type: string
+          nullable: true
+        brightness:
+          type: integer
+        slideshow_speed:
+          type: integer
+        slideshow_style:
+          type: integer
+        sleeps_at:
+          type: string
+          description: Time string (HH:MM)
+        wakes_at:
+          type: string
+          description: Time string (HH:MM)
+        currently_sleeping:
+          type: boolean
+        sleep_mode_on:
+          type: boolean
+        start_sound:
+          type: boolean
+        show_caption:
+          type: boolean
+        show_heart:
+          type: boolean
+        blur_effect:
+          type: boolean
+        current_album_id:
+          type: integer
+        side_by_side:
+          type: boolean
+        notification_email:
+          type: string
+          nullable: true
+        gift_status:
+          type: string
+        mine:
+          type: boolean
+        plus:
+          type: boolean
+        trialing:
+          type: boolean
+        trial_expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        user_created_at:
+          type: string
+          format: date-time
+        access:
+          type: string
+        feature_bundle:
+          type: object
+          additionalProperties: true
+
+    DeviceAttributes:
+      type: object
+      properties:
+        name:
+          type: string
+        timezone:
+          type: string
+        activated:
+          type: boolean
+        category_id:
+          type: string
+          nullable: true
+        role:
+          type: string
+        brightness:
+          type: integer
+        slideshow_speed:
+          type: integer
+        slideshow_style:
+          type: integer
+        start_sound:
+          type: boolean
+        show_caption:
+          type: boolean
+        show_heart:
+          type: boolean
+        blur_effect:
+          type: boolean
+        current_album_id:
+          type: integer
+        sleeps_at:
+          type: string
+        wakes_at:
+          type: string
+        currently_sleeping:
+          type: boolean
+        sleep_mode_on:
+          type: boolean
+        side_by_side:
+          type: boolean
+        sleep_mode:
+          type: string
+          nullable: true
+        sleep_sound:
+          type: string
+          nullable: true
+        sleep_sound_volume:
+          type: integer
+          nullable: true
+        nightlight:
+          type: boolean
+        nightlight_brightness:
+          type: integer
+          nullable: true
+
+    SourceCalendarAttributes:
+      type: object
+      properties:
+        label:
+          type: string
+        source_id:
+          type: string
+        kind:
+          type: string
+        role:
+          type: string
+        default_for_new_events:
+          type: boolean
+        editable:
+          type: boolean
+
+    CalendarEventAttributes:
+      type: object
+      properties:
+        uid:
+          type: string
+        summary:
+          type: string
+        invited_emails:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+        all_day:
+          type: boolean
+        timezone:
+          type: string
+          nullable: true
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        recurring:
+          type: boolean
+        recurring_config:
+          type: object
+          nullable: true
+        rrule:
+          type: string
+          nullable: true
+        master_event_id:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        location:
+          type: string
+          nullable: true
+        lat:
+          type: number
+          nullable: true
+        lng:
+          type: number
+          nullable: true
+        source:
+          type: string
+        kind:
+          type: string
+        editable:
+          type: boolean
+        countdown_enabled:
+          type: boolean
+        owner_email:
+          type: string
+        calendar_id:
+          type: string
+        supports_notification_settings:
+          type: boolean
+
+    RewardAttributes:
+      type: object
+      properties:
+        name:
+          type: string
+        emoji_icon:
+          type: string
+        description:
+          type: string
+          nullable: true
+        point_value:
+          type: number
+        respawn_on_redemption:
+          type: boolean
+        redeemed_at:
+          type: string
+          format: date-time
+          nullable: true
 
     ListItemAttributes:
       type: object
@@ -341,43 +603,352 @@ components:
           type: integer
 
 security:
-  - TokenAuth: []
+  - BearerAuth: []
 
 paths:
-  /sessions:
-    post:
-      summary: Login and obtain auth token
+  /auth/session/new:
+    get:
+      summary: Fetch the login page and CSRF token
       security: []
-      operationId: login
+      operationId: getLoginPage
+      description: |
+        Returns the HTML login page. Extract the CSRF token from the
+        `<meta name="csrf-token" content="...">` tag and pass it as
+        `authenticity_token` in the subsequent `POST /auth/session`.
+      responses:
+        '200':
+          description: HTML login page containing CSRF token
+
+  /auth/session:
+    post:
+      summary: Submit login credentials to start an OAuth session
+      security: []
+      operationId: createSession
+      description: |
+        Authenticates the user with email and password. On success, the server
+        issues a 302 redirect to `/auth/session/success` and creates a session
+        from which the web app obtains an authorization code to exchange at
+        `POST /oauth/token`.
+
+        The `authenticity_token` (CSRF token) must be fetched first from
+        `GET /auth/session/new`.
       requestBody:
         required: true
         content:
-          application/json:
+          application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/LoginRequest'
+              type: object
+              required: [authenticity_token, email, password]
+              properties:
+                authenticity_token:
+                  type: string
+                  description: CSRF token from GET /auth/session/new (88-char base64url string)
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+      responses:
+        '302':
+          description: Redirect to /auth/session/success on successful login
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Redirect target (/auth/session/success)
+        '422':
+          description: Invalid credentials or CSRF token
+
+  /oauth/token:
+    post:
+      summary: Exchange authorization code for Bearer token
+      security: []
+      operationId: oauthToken
+      description: |
+        OAuth 2.0 token endpoint. Supports `authorization_code` and `refresh_token` grant types.
+
+        **Authorization Code flow** (initial login):
+        After the user authenticates at `POST /auth/session`, the app obtains an authorization
+        code and exchanges it here for a Bearer token.
+
+        **Refresh Token flow** (renew expired token):
+        Post `grant_type=refresh_token&refresh_token=<token>&client_id=skylight-mobile`.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [grant_type, client_id]
+              properties:
+                grant_type:
+                  type: string
+                  enum: [authorization_code, refresh_token]
+                client_id:
+                  type: string
+                  enum: [skylight-mobile]
+                code:
+                  type: string
+                  description: Authorization code (required for authorization_code grant)
+                refresh_token:
+                  type: string
+                  description: Refresh token (required for refresh_token grant)
+                redirect_uri:
+                  type: string
+                  description: Must match the URI used to obtain the code
+                scope:
+                  type: string
+                  default: everything
+                skylight_api_client_device_fingerprint:
+                  type: string
+                  description: UUID identifying this client device
+                skylight_api_client_device_platform:
+                  type: string
+                  example: web
+                skylight_api_client_device_name:
+                  type: string
+                skylight_api_client_device_os_version:
+                  type: string
+                skylight_api_client_device_app_version:
+                  type: string
+                skylight_api_client_device_hardware:
+                  type: string
       responses:
         '200':
-          description: Successful login
+          description: Token issued successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LoginResponse'
-        '401':
-          description: Invalid credentials
+                $ref: '#/components/schemas/OAuthTokenResponse'
+        '400':
+          description: Invalid grant or unsupported grant type
 
-  /frames:
+  /api/user:
     get:
-      summary: List all frames
+      summary: Get the authenticated user's profile
+      operationId: getUser
+      responses:
+        '200':
+          description: User profile (JSON:API)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiSingleResponse'
+
+  /api/plus_access:
+    get:
+      summary: Get the authenticated user's Plus subscription access
+      operationId: getPlusAccess
+      responses:
+        '200':
+          description: Plus access details (JSON:API)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiSingleResponse'
+
+  /api/frames:
+    get:
+      summary: List all frames the user has access to
       operationId: listFrames
       responses:
         '200':
-          description: List of frames
+          description: All frames (JSON:API)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FramesResponse'
+                $ref: '#/components/schemas/JsonApiListResponse'
 
-  /frames/{frameId}/lists:
+  /api/frames/calendar:
+    get:
+      summary: List calendar-type frames
+      operationId: listCalendarFrames
+      responses:
+        '200':
+          description: Calendar frames (JSON:API, type=approved_viewer_frame)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiListResponse'
+
+  /api/frames/photo:
+    get:
+      summary: List photo-type frames
+      operationId: listPhotoFrames
+      responses:
+        '200':
+          description: Photo frames (JSON:API, type=approved_viewer_frame)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiListResponse'
+
+  /api/frames/tv:
+    get:
+      summary: List TV-type frames
+      operationId: listTvFrames
+      responses:
+        '200':
+          description: TV frames (JSON:API, type=approved_viewer_frame)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiListResponse'
+
+  /api/frames/{frameId}:
+    get:
+      summary: Get a single frame
+      operationId: getFrame
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Frame (JSON:API, type=approved_viewer_frame)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiSingleResponse'
+
+  /api/frames/{frameId}/devices:
+    get:
+      summary: List physical devices attached to a frame
+      operationId: listDevices
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Devices (JSON:API)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiListResponse'
+
+  /api/frames/{frameId}/source_calendars:
+    get:
+      summary: List calendar sources connected to a frame
+      operationId: listSourceCalendars
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Source calendars (JSON:API)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiListResponse'
+
+  /api/frames/{frameId}/calendar_events:
+    get:
+      summary: List calendar events for a frame in a date range
+      operationId: listCalendarEvents
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: date_min
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Start date (YYYY-MM-DD)
+        - name: date_max
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: End date (YYYY-MM-DD)
+        - name: timezone
+          in: query
+          schema:
+            type: string
+          description: IANA timezone name (e.g. America/New_York)
+        - name: include
+          in: query
+          schema:
+            type: string
+          description: Comma-separated related resources to sideload
+      responses:
+        '200':
+          description: Calendar events (JSON:API)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiListResponse'
+
+  /api/frames/{frameId}/categories:
+    get:
+      summary: List family member profile categories
+      operationId: listCategories
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Categories (JSON:API)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiListResponse'
+
+  /api/frames/{frameId}/rewards:
+    get:
+      summary: List reward catalog items for a frame
+      operationId: listRewards
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Rewards (JSON:API, type=reward)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonApiListResponse'
+
+  /api/frames/{frameId}/reward_points:
+    get:
+      summary: Get reward point balances per category
+      operationId: getRewardPoints
+      parameters:
+        - name: frameId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Reward points (plain array, not JSON:API)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RewardPoint'
+
+  /api/frames/{frameId}/lists:
     get:
       summary: List all grocery/shopping lists for a frame
       operationId: listLists
@@ -389,13 +960,13 @@ paths:
             type: string
       responses:
         '200':
-          description: List of lists (JSON:API format)
+          description: Lists (JSON:API)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JsonApiListResponse'
 
-  /frames/{frameId}/lists/{listId}/list_items:
+  /api/frames/{frameId}/lists/{listId}/list_items:
     get:
       summary: List all items in a list
       operationId: listItems
@@ -412,7 +983,7 @@ paths:
             type: string
       responses:
         '200':
-          description: List items (JSON:API format)
+          description: List items (JSON:API)
           content:
             application/json:
               schema:
@@ -439,13 +1010,13 @@ paths:
               $ref: '#/components/schemas/CreateListItemRequest'
       responses:
         '201':
-          description: Created list item
+          description: Created list item (JSON:API)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JsonApiSingleResponse'
 
-  /frames/{frameId}/lists/{listId}/list_items/{itemId}:
+  /api/frames/{frameId}/lists/{listId}/list_items/{itemId}:
     patch:
       summary: Update a list item
       operationId: updateListItem
@@ -473,13 +1044,13 @@ paths:
               $ref: '#/components/schemas/UpdateListItemRequest'
       responses:
         '200':
-          description: Updated list item
+          description: Updated list item (JSON:API)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JsonApiSingleResponse'
 
-  /frames/{frameId}/lists/{listId}/list_items/bulk_destroy:
+  /api/frames/{frameId}/lists/{listId}/list_items/bulk_destroy:
     delete:
       summary: Bulk delete list items (only working deletion method)
       operationId: deleteListItems
@@ -504,45 +1075,7 @@ paths:
         '200':
           description: Items deleted successfully
 
-  /frames/{frameId}/categories:
-    get:
-      summary: List family member profile categories
-      operationId: listCategories
-      parameters:
-        - name: frameId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: List of categories (JSON:API format)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/JsonApiListResponse'
-
-  /frames/{frameId}/reward_points:
-    get:
-      summary: Get reward point balances per category
-      operationId: getRewardPoints
-      parameters:
-        - name: frameId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Reward points (plain array, not JSON:API)
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/RewardPoint'
-
-  /frames/{frameId}/task_box/items:
+  /api/frames/{frameId}/task_box/items:
     get:
       summary: List task box items
       operationId: listTaskBoxItems
@@ -554,7 +1087,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Task box items (JSON:API format)
+          description: Task box items (JSON:API)
           content:
             application/json:
               schema:
@@ -576,13 +1109,13 @@ paths:
               $ref: '#/components/schemas/CreateTaskBoxItemRequest'
       responses:
         '201':
-          description: Created task box item
+          description: Created task box item (JSON:API)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JsonApiSingleResponse'
 
-  /frames/{frameId}/task_box/items/{itemId}:
+  /api/frames/{frameId}/task_box/items/{itemId}:
     patch:
       summary: Update a task box item
       operationId: updateTaskBoxItem
@@ -605,7 +1138,7 @@ paths:
               $ref: '#/components/schemas/UpdateTaskBoxItemRequest'
       responses:
         '200':
-          description: Updated task box item
+          description: Updated task box item (JSON:API)
           content:
             application/json:
               schema:
@@ -628,7 +1161,7 @@ paths:
         '204':
           description: Deleted successfully
 
-  /frames/{frameId}/chores:
+  /api/frames/{frameId}/chores:
     get:
       summary: List chores with optional date range and category filters
       operationId: listChores
@@ -662,13 +1195,13 @@ paths:
           description: Filter by profile/category ID
       responses:
         '200':
-          description: Chores (JSON:API format)
+          description: Chores (JSON:API)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JsonApiListResponse'
 
-  /frames/{frameId}/chores/create_multiple:
+  /api/frames/{frameId}/chores/create_multiple:
     post:
       summary: Create one or more chores (one per category_id)
       operationId: createChore
@@ -686,13 +1219,13 @@ paths:
               $ref: '#/components/schemas/CreateChoreRequest'
       responses:
         '201':
-          description: Created chores
+          description: Created chores (JSON:API)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JsonApiListResponse'
 
-  /frames/{frameId}/chores/{choreId}:
+  /api/frames/{frameId}/chores/{choreId}:
     put:
       summary: Update a chore (full object) or complete it
       operationId: updateChore
@@ -720,7 +1253,7 @@ paths:
                 - $ref: '#/components/schemas/CompleteChoreRequest'
       responses:
         '200':
-          description: Updated chore
+          description: Updated chore (JSON:API)
           content:
             application/json:
               schema:
@@ -749,7 +1282,7 @@ paths:
         '200':
           description: Deleted successfully
 
-  /frames/{frameId}/meals/categories:
+  /api/frames/{frameId}/meals/categories:
     get:
       summary: List meal categories (Breakfast, Lunch, Dinner, Snack)
       operationId: listMealCategories
@@ -761,13 +1294,13 @@ paths:
             type: string
       responses:
         '200':
-          description: Meal categories (JSON:API format)
+          description: Meal categories (JSON:API)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JsonApiListResponse'
 
-  /frames/{frameId}/meals/recipes:
+  /api/frames/{frameId}/meals/recipes:
     get:
       summary: List meal recipes
       operationId: listMealRecipes
@@ -784,7 +1317,7 @@ paths:
           description: Include related resources (e.g. meal_category)
       responses:
         '200':
-          description: Meal recipes (JSON:API format)
+          description: Meal recipes (JSON:API)
           content:
             application/json:
               schema:
@@ -811,13 +1344,13 @@ paths:
               $ref: '#/components/schemas/CreateMealRecipeRequest'
       responses:
         '201':
-          description: Created meal recipe
+          description: Created meal recipe (JSON:API)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JsonApiSingleResponse'
 
-  /frames/{frameId}/meals/recipes/{recipeId}:
+  /api/frames/{frameId}/meals/recipes/{recipeId}:
     get:
       summary: Get a single meal recipe
       operationId: getMealRecipe
@@ -839,13 +1372,13 @@ paths:
           description: Include related resources (e.g. meal_category)
       responses:
         '200':
-          description: Meal recipe (JSON:API format)
+          description: Meal recipe (JSON:API)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JsonApiSingleResponse'
 
-  /frames/{frameId}/meals/recipes/{recipeId}/add_to_grocery_list:
+  /api/frames/{frameId}/meals/recipes/{recipeId}/add_to_grocery_list:
     post:
       summary: Add recipe ingredients to grocery list
       operationId: addRecipeToGroceryList
@@ -862,13 +1395,13 @@ paths:
             type: string
       responses:
         '200':
-          description: Recipe added to grocery list
+          description: Recipe added to grocery list (JSON:API)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JsonApiSingleResponse'
 
-  /frames/{frameId}/meals/sittings:
+  /api/frames/{frameId}/meals/sittings:
     get:
       summary: List meal sittings in a date range
       operationId: listMealSittings
@@ -899,7 +1432,7 @@ paths:
           description: Include related resources (e.g. meal_category,meal_recipe)
       responses:
         '200':
-          description: Meal sittings (JSON:API format)
+          description: Meal sittings (JSON:API)
           content:
             application/json:
               schema:
@@ -935,13 +1468,13 @@ paths:
               $ref: '#/components/schemas/CreateMealSittingRequest'
       responses:
         '201':
-          description: Created meal sitting
+          description: Created meal sitting (JSON:API)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JsonApiListResponse'
 
-  /frames/{frameId}/meals/sittings/{sittingId}/instances/{date}:
+  /api/frames/{frameId}/meals/sittings/{sittingId}/instances/{date}:
     delete:
       summary: Delete a meal sitting instance
       operationId: deleteMealSitting
@@ -979,7 +1512,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Sitting instance deleted
+          description: Sitting instance deleted (JSON:API)
           content:
             application/json:
               schema:

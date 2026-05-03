@@ -2,30 +2,33 @@ package client
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
-const defaultBaseURL = "https://api.ourskylight.com/api"
+const defaultBaseURL = "https://app.ourskylight.com/api"
+const oauthURL = "https://app.ourskylight.com/oauth/token"
+const oauthClientID = "skylight-mobile"
 
 // Client is an HTTP client for the Skylight Calendar API.
 type Client struct {
 	baseURL    string
-	token      string
+	token      string // OAuth Bearer access_token
 	httpClient *http.Client
 }
 
-// NewClient creates a new API client with the given base URL and auth token.
-// The token should be the base64-encoded "user_id:user_token" string.
+// NewClient creates a new API client with the given base URL and OAuth Bearer token.
 func NewClient(baseURL, token string) *Client {
 	if baseURL == "" {
 		baseURL = defaultBaseURL
@@ -42,14 +45,12 @@ func NewClient(baseURL, token string) *Client {
 // queryParams are appended as URL query parameters.
 // body is JSON-encoded for POST/PUT/PATCH requests when non-nil.
 func (c *Client) Do(method, path string, pathParams, queryParams map[string]string, body interface{}) ([]byte, error) {
-	// Substitute path parameters
 	for k, v := range pathParams {
 		path = strings.ReplaceAll(path, "{"+k+"}", url.PathEscape(v))
 	}
 
 	fullURL := c.baseURL + path
 
-	// Append query parameters
 	if len(queryParams) > 0 {
 		params := url.Values{}
 		for k, v := range queryParams {
@@ -62,7 +63,6 @@ func (c *Client) Do(method, path string, pathParams, queryParams map[string]stri
 		}
 	}
 
-	// Encode body
 	var bodyReader io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
@@ -77,7 +77,7 @@ func (c *Client) Do(method, path string, pathParams, queryParams map[string]stri
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Basic %s", c.token))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.token))
 	req.Header.Set("User-Agent", "SkylightMobile (web)")
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -101,64 +101,170 @@ func (c *Client) Do(method, path string, pathParams, queryParams map[string]stri
 	return respBody, nil
 }
 
-// LoginResponse is the JSON:API response from POST /sessions.
-// The API returns data.id (user_id) and data.attributes.token.
-type LoginResponse struct {
-	Data struct {
-		ID         string `json:"id"`
-		Attributes struct {
-			Token string `json:"token"`
-		} `json:"attributes"`
-	} `json:"data"`
+// OAuthTokenResponse is the response from POST /oauth/token.
+type OAuthTokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	TokenType    string `json:"token_type"`
+	ExpiresIn    int    `json:"expires_in"`
+	RefreshToken string `json:"refresh_token"`
+	Scope        string `json:"scope"`
+	CreatedAt    int64  `json:"created_at"`
 }
 
-// Login authenticates with email and password, returning a base64 token string.
-func Login(baseURL, email, password string) (string, error) {
-	if baseURL == "" {
-		baseURL = defaultBaseURL
-	}
-	baseURL = strings.TrimRight(baseURL, "/")
+var csrfRe = regexp.MustCompile(`<meta name="csrf-token" content="([^"]+)"`)
 
-	payload := map[string]string{
-		"email":    email,
-		"password": password,
+// Login authenticates with email and password using the OAuth Authorization Code flow:
+//  1. GET /auth/session/new  — extract CSRF token from HTML
+//  2. POST /auth/session     — submit credentials; server sets session cookie
+//  3. GET /oauth/authorize   — exchange session for an auth code (captures redirect)
+//  4. POST /oauth/token      — exchange auth code for Bearer + refresh tokens
+func Login(email, password string) (*OAuthTokenResponse, error) {
+	jar, _ := cookiejar.New(nil)
+	client := &http.Client{
+		Jar: jar,
+		// Do not follow the final redirect to ourskylight.com — we need to capture
+		// the authorization code from the Location header.
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if strings.HasPrefix(req.URL.String(), "https://ourskylight.com") {
+				return http.ErrUseLastResponse
+			}
+			return nil
+		},
 	}
-	data, _ := json.Marshal(payload)
 
-	req, err := http.NewRequest("POST", baseURL+"/sessions", bytes.NewReader(data))
+	// Step 1: fetch login page for CSRF token
+	resp, err := client.Get("https://app.ourskylight.com/auth/session/new")
 	if err != nil {
-		return "", fmt.Errorf("creating login request: %w", err)
+		return nil, fmt.Errorf("fetching login page: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	matches := csrfRe.FindSubmatch(body)
+	if len(matches) < 2 {
+		return nil, errors.New("could not extract CSRF token from login page")
+	}
+	csrfToken := string(matches[1])
+
+	// Step 2: submit credentials
+	form := url.Values{}
+	form.Set("authenticity_token", csrfToken)
+	form.Set("email", email)
+	form.Set("password", password)
+
+	req, _ := http.NewRequest("POST", "https://app.ourskylight.com/auth/session", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", "SkylightMobile (web)")
+	req.Header.Set("Referer", "https://app.ourskylight.com/auth/session/new")
+
+	resp, err = client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("submitting credentials: %w", err)
+	}
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("login failed (%d): check email and password", resp.StatusCode)
+	}
+
+	// Step 3: exchange session for an authorization code
+	authorizeURL := "https://app.ourskylight.com/oauth/authorize?" + url.Values{
+		"client_id":     {oauthClientID},
+		"redirect_uri":  {"https://ourskylight.com/welcome"},
+		"response_type": {"code"},
+		"scope":         {"everything"},
+	}.Encode()
+
+	req, _ = http.NewRequest("GET", authorizeURL, nil)
+	req.Header.Set("User-Agent", "SkylightMobile (web)")
+
+	resp, err = client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("requesting authorization: %w", err)
+	}
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+
+	location := resp.Header.Get("Location")
+	redirectURL, err := url.Parse(location)
+	if err != nil || redirectURL.Query().Get("code") == "" {
+		return nil, fmt.Errorf("no authorization code in redirect: %q", location)
+	}
+	code := redirectURL.Query().Get("code")
+
+	// Step 4: exchange code for tokens
+	return exchangeCode(code)
+}
+
+func exchangeCode(code string) (*OAuthTokenResponse, error) {
+	form := url.Values{}
+	form.Set("grant_type", "authorization_code")
+	form.Set("client_id", oauthClientID)
+	form.Set("code", code)
+	form.Set("redirect_uri", "https://ourskylight.com/welcome")
+	form.Set("scope", "everything")
+
+	req, _ := http.NewRequest("POST", oauthURL, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("User-Agent", "SkylightMobile (web)")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("login request failed: %w", err)
+		return nil, fmt.Errorf("token exchange request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 400 {
-		return "", fmt.Errorf("login failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("token exchange failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
-	var lr LoginResponse
-	if err := json.Unmarshal(body, &lr); err != nil {
-		return "", fmt.Errorf("parsing login response: %w", err)
+	var tok OAuthTokenResponse
+	if err := json.Unmarshal(body, &tok); err != nil {
+		return nil, fmt.Errorf("parsing token response: %w", err)
 	}
-	if lr.Data.ID == "" || lr.Data.Attributes.Token == "" {
-		return "", fmt.Errorf("login response missing user id or token")
+	if tok.AccessToken == "" {
+		return nil, fmt.Errorf("token response missing access_token: %s", string(body))
+	}
+	return &tok, nil
+}
+
+// RefreshToken exchanges a refresh_token for a new access_token via POST /oauth/token.
+func RefreshToken(refreshToken string) (*OAuthTokenResponse, error) {
+	form := url.Values{}
+	form.Set("grant_type", "refresh_token")
+	form.Set("client_id", oauthClientID)
+	form.Set("refresh_token", refreshToken)
+	form.Set("scope", "everything")
+
+	req, _ := http.NewRequest("POST", oauthURL, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", "SkylightMobile (web)")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("refresh request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("token refresh failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
-	raw := fmt.Sprintf("%s:%s", lr.Data.ID, lr.Data.Attributes.Token)
-	return base64.StdEncoding.EncodeToString([]byte(raw)), nil
+	var tok OAuthTokenResponse
+	if err := json.Unmarshal(body, &tok); err != nil {
+		return nil, fmt.Errorf("parsing refresh response: %w", err)
+	}
+	return &tok, nil
 }
 
 // Config represents the skylight CLI configuration file.
 type Config struct {
-	Token   string `yaml:"token"`
-	FrameID string `yaml:"frame_id,omitempty"`
+	Token        string `yaml:"token"`                   // OAuth Bearer access_token
+	RefreshToken string `yaml:"refresh_token,omitempty"` // OAuth refresh_token
+	FrameID      string `yaml:"frame_id,omitempty"`
 }
 
 // ConfigPath returns the default config file path.
@@ -204,7 +310,7 @@ func SaveConfig(path string, cfg *Config) error {
 	return nil
 }
 
-// ResolveToken returns the token from the SKYLIGHT_TOKEN env var or config file.
+// ResolveToken returns the Bearer access token from SKYLIGHT_TOKEN env var or config file.
 func ResolveToken(configPath string) (string, error) {
 	if t := os.Getenv("SKYLIGHT_TOKEN"); t != "" {
 		return t, nil

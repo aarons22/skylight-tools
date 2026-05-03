@@ -18,17 +18,17 @@ var accountLoginCmd = &cobra.Command{
 	Short: "Authenticate and save credentials to config",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		baseURL, _ := cmd.Root().PersistentFlags().GetString("base-url")
 		configPath, _ := cmd.Root().PersistentFlags().GetString("config")
 
-		token, err := client.Login(baseURL, accountLoginEmail, accountLoginPassword)
+		tok, err := client.Login(accountLoginEmail, accountLoginPassword)
 		if err != nil {
 			return err
 		}
 
 		cfg := &client.Config{
-			Token:   token,
-			FrameID: accountLoginFrameID,
+			Token:        tok.AccessToken,
+			RefreshToken: tok.RefreshToken,
+			FrameID:      accountLoginFrameID,
 		}
 		if err := client.SaveConfig(configPath, cfg); err != nil {
 			return err
